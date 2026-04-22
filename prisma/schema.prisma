@@ -1,0 +1,118 @@
+// Social Media Agent — data model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum PostStatus {
+  DRAFTING
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  OMG
+}
+
+enum CredentialType {
+  META
+  LINKEDIN
+}
+
+model Topic {
+  id         String   @id @default(cuid())
+  name       String
+  keywords   String
+  brandVoice String?  @db.Text
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  posts      Post[]
+}
+
+model NewsItem {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  urlHash   String   @unique
+  title     String
+  snippet   String?  @db.Text
+  fetchedAt DateTime @default(now())
+  posts     Post[]
+}
+
+model Post {
+  id           String     @id @default(cuid())
+  status       PostStatus @default(DRAFTING)
+  topicId      String?
+  topic        Topic?     @relation(fields: [topicId], references: [id])
+  sourceNewsId String?
+  sourceNews   NewsItem?  @relation(fields: [sourceNewsId], references: [id])
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  failureCount Int        @default(0)
+  lastError    String?    @db.Text
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  variants     PostVariant[]
+  publishLogs  PublishLog[]
+}
+
+model PostVariant {
+  id          String    @id @default(cuid())
+  postId      String
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platform    Platform
+  caption     String    @db.Text
+  hashtags    String?   @db.Text
+  bodyMd      String?   @db.Text
+  title       String?
+  slug        String?
+  meta        Json?
+  remoteId    String?
+  publishedAt DateTime?
+  media       Media[]
+
+  @@unique([postId, platform])
+}
+
+model Media {
+  id          String      @id @default(cuid())
+  variantId   String
+  variant     PostVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  imageUrl    String
+  prompt      String?     @db.Text
+  generatedBy String      @default("gemini")
+  createdAt   DateTime    @default(now())
+}
+
+model PlatformCredential {
+  id               String         @id @default(cuid())
+  type             CredentialType @unique
+  encryptedPayload String         @db.Text
+  expiresAt        DateTime?
+  updatedAt        DateTime       @updatedAt
+}
+
+model PublishLog {
+  id           String   @id @default(cuid())
+  postId       String
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platform     Platform
+  attemptAt    DateTime @default(now())
+  success      Boolean
+  remoteId     String?
+  errorMessage String?  @db.Text
+}

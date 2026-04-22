@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/agent",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/publish",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
