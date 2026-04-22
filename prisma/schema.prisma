@@ -32,6 +32,26 @@ enum CredentialType {
   LINKEDIN
 }
 
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum CampaignCadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum CampaignTheme {
+  RELIABILITY_PRO
+  INNOVATION_TECH
+  SPEED_URGENCY
+}
+
 model Topic {
   id         String   @id @default(cuid())
   name       String
@@ -58,6 +78,8 @@ model Post {
   status       PostStatus @default(DRAFTING)
   topicId      String?
   topic        Topic?     @relation(fields: [topicId], references: [id])
+  campaignId   String?
+  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   sourceNewsId String?
   sourceNews   NewsItem?  @relation(fields: [sourceNewsId], references: [id])
   scheduledAt  DateTime?
@@ -68,6 +90,44 @@ model Post {
   updatedAt    DateTime   @updatedAt
   variants     PostVariant[]
   publishLogs  PublishLog[]
+}
+
+model Campaign {
+  id            String            @id @default(cuid())
+  name          String
+  description   String?           @db.Text
+  status        CampaignStatus    @default(DRAFT)
+  keywords      String
+  brandVoice    String?           @db.Text
+  theme         CampaignTheme
+  cadence       CampaignCadence
+  dayOfWeek     Int?
+  hourOfDay     Int?
+  timezone      String            @default("Asia/Bangkok")
+  customCron    String?
+  platforms     Platform[]
+  postsPerRun   Int               @default(1)
+  totalPostsCap Int?
+  autoApprove   Boolean           @default(false)
+  startAt       DateTime          @default(now())
+  endAt         DateTime?
+  nextRunAt     DateTime?
+  lastRunAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  posts         Post[]
+  runs          CampaignRun[]
+}
+
+model CampaignRun {
+  id         String     @id @default(cuid())
+  campaignId String
+  campaign   Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  startedAt  DateTime   @default(now())
+  finishedAt DateTime?
+  ok         Boolean    @default(false)
+  postId     String?
+  error      String?    @db.Text
 }
 
 model PostVariant {

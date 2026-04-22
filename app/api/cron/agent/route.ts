@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { runAgentForTopic } from "@/lib/agent/run";
+import { runDueCampaigns } from "@/lib/campaigns/scheduler";
 import { assertCronSecret } from "@/lib/cron-auth";
 import { getServerEnv } from "@/lib/env";
 
@@ -24,7 +25,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, created });
+    let campaignRuns: { campaignId: string; ok: boolean; postIds: string[]; error?: string }[] = [];
+    try {
+      const { processed } = await runDueCampaigns();
+      campaignRuns = processed;
+    } catch (e) {
+      console.error("runDueCampaigns failed:", e);
+    }
+
+    return NextResponse.json({ ok: true, created, campaignRuns });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 500 });

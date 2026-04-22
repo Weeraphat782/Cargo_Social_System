@@ -1,4 +1,5 @@
 import { runDueScheduledPosts } from "@/lib/run-scheduled-publish";
+import { runDueCampaigns } from "@/lib/campaigns/scheduler";
 
 const GLOBAL_KEY = Symbol.for("omg.devSchedulerStarted");
 
@@ -27,6 +28,17 @@ export function registerDevScheduler(): void {
       }
     } catch (e) {
       console.error("[dev-scheduler] tick failed:", e);
+    }
+    try {
+      const { processed } = await runDueCampaigns();
+      if (processed.length) {
+        const ok = processed.filter((p) => p.ok).length;
+        console.log(
+          `[dev-scheduler] campaigns: ${processed.length} run(s) — ok: ${ok}`
+        );
+      }
+    } catch (e) {
+      console.error("[dev-scheduler] campaigns tick failed:", e);
     }
   }
 

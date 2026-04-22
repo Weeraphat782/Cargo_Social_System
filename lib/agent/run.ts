@@ -4,13 +4,15 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Schema } from "@google/genai";
-import { Platform, PostStatus } from "@prisma/client";
+import { CampaignStatus, Platform, PostStatus } from "@prisma/client";
+import { addMinutes } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireEnv } from "@/lib/env";
 import { searchNews } from "@/lib/news";
-import { generateAndUploadImage } from "@/lib/imagegen/gemini";
+import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import { OMG_SERVICES, PROMO_GUIDANCE } from "@/lib/agent/promo-config";
+import { getThemeBundle, type ThemeBundle } from "@/lib/agent/themes";
 
 const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash";
 
@@ -185,6 +187,236 @@ Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that fi
     newsUrl: input.newsUrl,
   });
   return parsed;
+}
+
+export async function draftWithGeminiForCampaign(input: {
+  campaignName: string;
+  brandVoice?: string | null;
+  newsTitle: string;
+  newsUrl: string;
+  newsSnippet: string;
+  theme: ThemeBundle;
+}): Promise<DraftJson> {
+  const servicesCatalog = OMG_SERVICES.map(
+    (s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`
+  ).join("\n");
+
+  const prompt = `You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.
+
+CAMPAIGN (theme-driven automation): ${input.campaignName}
+Theme: ${input.theme.label}
+Theme angle: ${input.theme.angle}
+Theme tone: ${input.theme.tone}
+Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use OMG services catalog to stay factual.
+Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
+
+Source article (for OMG newsroom only — do NOT paraphrase on social):
+Title: ${input.newsTitle}
+URL: ${input.newsUrl}
+Snippet: ${input.newsSnippet}
+
+OMG services catalog (for Facebook / Instagram / LinkedIn promo):
+${servicesCatalog}
+
+Promo guidance:
+${PROMO_GUIDANCE}
+
+Image direction (MUST reflect in the imagePrompt field): ${input.theme.visualStyleNotes}
+
+OMG newsroom requirements:
+- Write an original news-style article (500-900 words, ## headings, markdown).
+- Lead with what happened and why it matters for logistics / supply chain.
+- Attribute facts clearly; do not fabricate figures.
+- Set JSON fields sourceTitle and sourceUrl to the source article title and URL above verbatim.
+- End bodyMd with a final line exactly: > Source: [sourceTitle](sourceUrl) using the same title and URL as above.
+- slug must be unique kebab-case.
+
+Social requirements (promo, NOT news rewrite):
+- Facebook: ~100-180 words, soft CTA, follow Promo guidance; align with theme tone.
+- Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
+- LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability and the campaign theme.
+
+Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that matches the theme and news context. ${input.theme.visualStyleNotes} Professional logistics photography. No text/watermarks/logos in the image.`;
+
+  const ai = getGenAI();
+  const response = await withGeminiRetry("draftWithGeminiForCampaign", () =>
+    ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: draftResponseSchema,
+      },
+    })
+  );
+
+  const text = response.text;
+  if (!text) throw new Error("Empty Gemini text response for campaign draft");
+
+  const parsed = JSON.parse(text) as DraftJson;
+  applyOmgSourceFields(parsed, {
+    newsTitle: input.newsTitle,
+    newsUrl: input.newsUrl,
+  });
+  return parsed;
+}
+
+export type RunAgentForCampaignOptions = {
+  /** When true, only ACTIVE campaigns run. Manual UI uses false. */
+  forCron?: boolean;
+};
+
+export async function runAgentForCampaign(
+  campaignId: string,
+  options: RunAgentForCampaignOptions = {}
+): Promise<{ postIds: string[] }> {
+  const { forCron = false } = options;
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign) throw new Error("Campaign not found");
+  if (forCron) {
+    if (campaign.status !== CampaignStatus.ACTIVE) {
+      throw new Error("Campaign is not active");
+    }
+  } else {
+    if (campaign.status === CampaignStatus.COMPLETED) {
+      throw new Error("Campaign is completed");
+    }
+  }
+
+  const theme = getThemeBundle(campaign.theme);
+  const platformList: Platform[] =
+    campaign.platforms.length > 0
+      ? (campaign.platforms as Platform[])
+      : (["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as Platform[]);
+
+  const num = Math.max(5, campaign.postsPerRun);
+  const results = await searchNews(campaign.keywords, { num });
+  if (!results.length) {
+    throw new Error("No news results returned from search provider");
+  }
+
+  const postIds: string[] = [];
+
+  for (let i = 0; i < campaign.postsPerRun; i++) {
+    if (campaign.totalPostsCap != null) {
+      const count = await prisma.post.count({ where: { campaignId: campaign.id } });
+      if (count >= campaign.totalPostsCap) break;
+    }
+    const top = results[i] ?? results[0];
+    if (!top) break;
+    const newsRow = await prisma.newsItem.findFirst({ where: { url: top.link } });
+    if (!newsRow) {
+      throw new Error("NewsItem missing after search");
+    }
+
+    const draft = await draftWithGeminiForCampaign({
+      campaignName: campaign.name,
+      brandVoice: campaign.brandVoice,
+      newsTitle: top.title,
+      newsUrl: top.link,
+      newsSnippet: top.snippet,
+      theme,
+    });
+
+    const p0 = platformList[0] ?? "FACEBOOK";
+    const aspect: AspectKey = platformList.includes("OMG")
+      ? "OMG"
+      : p0 === "INSTAGRAM"
+        ? "INSTAGRAM"
+        : p0 === "LINKEDIN"
+          ? "LINKEDIN"
+          : "FACEBOOK";
+
+    let sharedImagePrompt: string = draft.imagePrompt;
+    let sharedImageUrl = PLACEHOLDER_PNG;
+    try {
+      const gen = await generateAndUploadImage({
+        prompt: draft.imagePrompt,
+        aspect,
+        storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}`,
+        referenceCategory: theme.referenceCategory,
+      });
+      sharedImageUrl = gen.imageUrl;
+      sharedImagePrompt = gen.prompt;
+    } catch (err) {
+      console.error(
+        "[agent] campaign image generation failed:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+
+    const variantData: Record<
+      Platform,
+      { caption: string; hashtags?: string; title?: string; slug?: string; bodyMd?: string }
+    > = {
+      FACEBOOK: { caption: draft.facebook.caption },
+      INSTAGRAM: {
+        caption: draft.instagram.caption,
+        hashtags: draft.instagram.hashtags,
+      },
+      LINKEDIN: { caption: draft.linkedin.caption },
+      OMG: {
+        caption: draft.omg.summary,
+        title: draft.omg.title,
+        slug: draft.omg.slug,
+        bodyMd: draft.omg.bodyMd,
+      },
+    };
+
+    const created = await prisma.$transaction(
+      async (tx) => {
+        const post = await tx.post.create({
+          data: {
+            status: PostStatus.DRAFTING,
+            campaignId: campaign.id,
+            sourceNewsId: newsRow.id,
+          },
+        });
+
+        for (const platform of platformList) {
+          const v = variantData[platform];
+          const pv = await tx.postVariant.create({
+            data: {
+              postId: post.id,
+              platform,
+              caption: v.caption,
+              hashtags: v.hashtags ?? null,
+              title: v.title ?? null,
+              slug: v.slug ?? null,
+              bodyMd: v.bodyMd ?? null,
+            },
+          });
+          await tx.media.create({
+            data: {
+              variantId: pv.id,
+              imageUrl: sharedImageUrl,
+              prompt: sharedImagePrompt,
+              generatedBy: "gemini",
+            },
+          });
+        }
+        return post;
+      },
+      { timeout: 30_000, maxWait: 10_000 }
+    );
+
+    const finalStatus = campaign.autoApprove
+      ? PostStatus.SCHEDULED
+      : PostStatus.PENDING_APPROVAL;
+    const scheduleAt = campaign.autoApprove ? addMinutes(new Date(), 2) : null;
+
+    await prisma.post.update({
+      where: { id: created.id },
+      data: {
+        status: finalStatus,
+        scheduledAt: scheduleAt,
+      },
+    });
+
+    postIds.push(created.id);
+  }
+
+  return { postIds };
 }
 
 export async function runAgentForTopic(topicId: string): Promise<{ postId: string }> {

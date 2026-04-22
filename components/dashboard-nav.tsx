@@ -34,6 +34,15 @@ const navLinks = [
     ),
   },
   {
+    href: "/campaigns",
+    label: "Campaigns",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.5 9.5L12 4l7.5 5.5V20a1 1 0 01-1 1h-5v-6H9v6H5a1 1 0 01-1-1V9.5z" />
+      </svg>
+    ),
+  },
+  {
     href: "/calendar",
     label: "Scheduled",
     icon: (
