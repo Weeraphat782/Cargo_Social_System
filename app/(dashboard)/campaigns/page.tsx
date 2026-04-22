@@ -4,13 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { CampaignCadence, CampaignStatus, CampaignTheme, Platform } from "@prisma/client";
 
-type ThemeRow = {
-  id: CampaignTheme;
-  label: string;
-  leadServiceName: string;
-  tone: string;
-  angle: string;
-  thumbnailPath: string;
+type SuggestedCampaign = {
+  name: string;
+  description: string;
+  keywords: string;
+  brandVoice: string;
+  theme: CampaignTheme;
+  themePitch: string;
+  cadence: CampaignCadence;
+  dayOfWeek: number;
+  hourOfDay: number;
+  postsPerRun: number;
+  autoApprove: boolean;
+  rationale: string;
 };
 
 type CampaignRow = {
@@ -43,6 +49,12 @@ const DOW: { v: number; label: string }[] = [
   { v: 6, label: "Sat" },
 ];
 
+const THEME_LANES: { id: CampaignTheme; label: string }[] = [
+  { id: "RELIABILITY_PRO", label: "Reliability & compliance" },
+  { id: "INNOVATION_TECH", label: "Innovation & visibility" },
+  { id: "SPEED_URGENCY", label: "Speed & time-critical" },
+];
+
 const PLATFORMS: { v: Platform; label: string }[] = [
   { v: "FACEBOOK", label: "Facebook" },
   { v: "INSTAGRAM", label: "Instagram" },
@@ -52,17 +64,23 @@ const PLATFORMS: { v: Platform; label: string }[] = [
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
-  const [themes, setThemes] = useState<ThemeRow[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewDates, setPreviewDates] = useState<string[]>([]);
+
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestHint, setSuggestHint] = useState("");
+  const [suggestions, setSuggestions] = useState<SuggestedCampaign[]>([]);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [keywords, setKeywords] = useState("");
   const [description, setDescription] = useState("");
   const [brandVoice, setBrandVoice] = useState("");
-  const [theme, setTheme] = useState<CampaignTheme | "">("");
+  const [aiThemePitch, setAiThemePitch] = useState<string | null>(null);
+  const [theme, setTheme] = useState<CampaignTheme>("INNOVATION_TECH");
   const [cadence, setCadence] = useState<CampaignCadence>("WEEKLY");
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [hourOfDay, setHourOfDay] = useState(9);
@@ -75,22 +93,14 @@ export default function CampaignsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [cRes, tRes] = await Promise.all([fetch("/api/campaigns"), fetch("/api/campaigns/themes")]);
+    const cRes = await fetch("/api/campaigns");
     if (cRes.ok) setCampaigns(await cRes.json());
-    if (tRes.ok) {
-      const d = (await tRes.json()) as { themes: ThemeRow[] };
-      setThemes(d.themes ?? []);
-    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (themes[0] && !theme) setTheme(themes[0].id);
-  }, [themes, theme]);
 
   const refreshPreview = useCallback(async () => {
     const res = await fetch("/api/campaigns/preview", {
@@ -114,6 +124,45 @@ export default function CampaignsPage() {
     if (showForm) void refreshPreview();
   }, [showForm, refreshPreview, cadence, dayOfWeek, hourOfDay, timezone]);
 
+  async function requestSuggestions() {
+    setSuggesting(true);
+    setSuggestError(null);
+    setSuggestions([]);
+    try {
+      const res = await fetch("/api/campaigns/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hint: suggestHint || undefined }),
+      });
+      const data = (await res.json()) as { campaigns?: SuggestedCampaign[]; error?: string };
+      if (!res.ok) {
+        setSuggestError(data.error ?? `Error ${res.status}`);
+        return;
+      }
+      setSuggestions(data.campaigns ?? []);
+    } catch {
+      setSuggestError("Network error");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function applySuggestion(s: SuggestedCampaign) {
+    setName(s.name);
+    setDescription(s.description);
+    setKeywords(s.keywords);
+    setBrandVoice(s.brandVoice);
+    setTheme(s.theme);
+    setAiThemePitch(s.themePitch);
+    setCadence(s.cadence);
+    setDayOfWeek(s.dayOfWeek);
+    setHourOfDay(s.hourOfDay);
+    setPostsPerRun(s.postsPerRun);
+    setAutoApprove(s.autoApprove);
+    setShowForm(true);
+    setShowAdvanced(false);
+  }
+
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
       prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
@@ -121,7 +170,7 @@ export default function CampaignsPage() {
   }
 
   async function createCampaign() {
-    if (!name.trim() || !keywords.trim() || !theme) return;
+    if (!name.trim() || !keywords.trim()) return;
     setSaving(true);
     try {
       const res = await fetch("/api/campaigns", {
@@ -150,6 +199,8 @@ export default function CampaignsPage() {
         setKeywords("");
         setDescription("");
         setBrandVoice("");
+        setAiThemePitch(null);
+        setSuggestions([]);
         await load();
       }
     } finally {
@@ -159,20 +210,89 @@ export default function CampaignsPage() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Campaigns</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "8px 0 0" }}>
-            Theme + cadence automation (beside Topics). Active campaigns run on the daily agent cron; dev runs every ~60s.
+            ไม่ต้องคิดแคมเปญเอง — กดให้ AI ออกแบบ (ชื่อ, คำค้น, โทน, ตาราง) แล้วเลือก 1 ข้อ; แนวภาพ/โปรดักชันยังอิง 3 lane ของระบบ (AI ช่วยเลือก lane ที่เหมาะ) นอกนั้นรันอัตโนมัติตาม cron
           </p>
         </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="omg-btn-primary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "ปิดฟอร์ม" : "สร้างเอง (ฟอร์ม)"}
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 24,
+        }}
+      >
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>ให้ AI แนะนำแคมเปญ</h2>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
+          รับ 3 แคมเปญที่ AI ออกแบบให้ (ไม่ใช่แค่การ์ดเลือก theme เอง) — ระบบจะ map กับ 3 แนวสร้างรูป/โทน
+        </p>
+        <label style={{ display: "block", fontSize: 12, marginBottom: 8 }}>
+          บอก AI เพิ่มได้ (เช่น โฟกัส cold chain, หรือฝากว่าง) — ไม่บังคับ
+          <textarea
+            className="omg-input"
+            style={{ width: "100%", marginTop: 6, minHeight: 56 }}
+            value={suggestHint}
+            onChange={(e) => setSuggestHint(e.target.value)}
+            placeholder="เช่น เน้นข่าวอุตสาหกรรมยา, รันสัปดาห์ละครั้ง, รีวิวก่อนลง"
+          />
+        </label>
         <button
           type="button"
           className="omg-btn-primary"
-          onClick={() => setShowForm((v) => !v)}
+          disabled={suggesting}
+          onClick={() => void requestSuggestions()}
         >
-          {showForm ? "Close" : "New campaign"}
+          {suggesting ? "กำลังคิด…" : "ขอ AI แนะนำ 3 แคมเปญ"}
         </button>
+        {suggestError && (
+          <p style={{ fontSize: 12, color: "var(--danger)", marginTop: 10 }}>{suggestError}</p>
+        )}
+
+        {suggestions.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginTop: 16 }}>
+            {suggestions.map((s, i) => (
+              <div
+                key={i}
+                style={{
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  padding: 12,
+                  background: "var(--bg-base)",
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: "var(--accent)", marginBottom: 6 }}>{s.themePitch}</div>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 8px", lineHeight: 1.4 }}>
+                  {s.description.slice(0, 200)}
+                  {s.description.length > 200 ? "…" : ""}
+                </p>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  Lane: {s.theme} · {s.cadence} · {DOW.find((d) => d.v === s.dayOfWeek)?.label} {s.hourOfDay}:00
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>{s.rationale}</div>
+                <button
+                  type="button"
+                  className="omg-btn-primary"
+                  style={{ width: "100%", marginTop: 10, fontSize: 12 }}
+                  onClick={() => applySuggestion(s)}
+                >
+                  ใช้แคมเปญนี้ → เปิดฟอร์ม
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -186,7 +306,12 @@ export default function CampaignsPage() {
             maxWidth: 720,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px" }}>New campaign</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 16px" }}>ตรวจ / บันทึกแคมเปญ</h2>
+          {aiThemePitch && (
+            <p style={{ fontSize: 12, color: "var(--accent)", margin: "0 0 12px" }}>
+              มุมที่ AI ตั้ง: <strong>{aiThemePitch}</strong> (lane: {theme})
+            </p>
+          )}
           <div style={{ display: "grid", gap: 12 }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
               Name
@@ -197,37 +322,47 @@ export default function CampaignsPage() {
               <input className="omg-input" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-              Description (optional)
+              Description
               <textarea className="omg-input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-              Brand voice (optional)
+              Brand voice
               <textarea className="omg-input" rows={2} value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} />
             </label>
 
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Theme</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
-                {themes.map((t) => (
-                  <button
-                    type="button"
-                    key={t.id}
-                    onClick={() => setTheme(t.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: 10,
-                      borderRadius: 8,
-                      border: theme === t.id ? "2px solid var(--accent)" : "1px solid var(--border)",
-                      background: theme === t.id ? "var(--bg-elevated)" : "var(--bg-base)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Lead: {t.leadServiceName}</div>
-                  </button>
-                ))}
+            <details open={showAdvanced} onToggle={(e) => setShowAdvanced((e.target as HTMLDetailsElement).open)}>
+              <summary style={{ fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                ตั้งเอง: แนวภาพ (lane) + แพลตฟอร์ม — ค่า default มาจาก AI หรือ Innovation
+              </summary>
+              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+                  แนว lane (อ้างอิง style รูป)
+                  <select className="omg-input" value={theme} onChange={(e) => setTheme(e.target.value as CampaignTheme)}>
+                    {THEME_LANES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.id} — {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Platforms</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {PLATFORMS.map((p) => (
+                      <label key={p.v} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={platforms.includes(p.v)}
+                          onChange={() => togglePlatform(p.v)}
+                        />
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            </details>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
@@ -265,22 +400,6 @@ export default function CampaignsPage() {
                 Timezone
                 <input className="omg-input" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
               </label>
-            </div>
-
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Platforms</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {PLATFORMS.map((p) => (
-                  <label key={p.v} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                    <input
-                      type="checkbox"
-                      checked={platforms.includes(p.v)}
-                      onChange={() => togglePlatform(p.v)}
-                    />
-                    {p.label}
-                  </label>
-                ))}
-              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
@@ -321,12 +440,12 @@ export default function CampaignsPage() {
 
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
               <input type="checkbox" checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} />
-              Auto-approve: schedule for publish 2 min after generate (bypasses queue)
+              Auto-approve: schedule ~2 min after generate
             </label>
 
             {previewDates.length > 0 && (
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                <strong style={{ color: "var(--text-primary)" }}>Next run preview</strong> (6 slots, BIWEEKLY 2+ assume prior run)
+                <strong style={{ color: "var(--text-primary)" }}>Next run preview</strong> (6 slots)
                 <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
                   {previewDates.map((d) => (
                     <li key={d}>{new Date(d).toLocaleString()}</li>
@@ -347,7 +466,7 @@ export default function CampaignsPage() {
       {loading ? (
         <p style={{ color: "var(--text-muted)" }}>Loading…</p>
       ) : campaigns.length === 0 ? (
-        <p style={{ color: "var(--text-muted)" }}>No campaigns yet. Create one to automate on a theme + schedule.</p>
+        <p style={{ color: "var(--text-muted)" }}>ยังไม่มีแคมเปญ — ลอง «ขอ AI แนะนำ 3 แคมเปญ» ด้านบน</p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
           {campaigns.map((c) => (
