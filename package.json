@@ -9,6 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:mark-init-applied": "prisma migrate resolve --applied 20260417000000_init",
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts"
   },
