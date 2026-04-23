@@ -40,16 +40,27 @@ enum CampaignStatus {
 }
 
 enum CampaignCadence {
+  DAILY
   WEEKLY
+  WEEKLY_MULTI
   BIWEEKLY
   MONTHLY
+  SPECIFIC_DATES
   CUSTOM
+  /// Dev-only: minute-level datetimes in scheduleConfig.datetimes; blocked in production API.
+  TEST_MINUTES
 }
 
 enum CampaignTheme {
   RELIABILITY_PRO
   INNOVATION_TECH
   SPEED_URGENCY
+}
+
+/// NEWS_DRIVEN: each run fetches real news from keywords. SELF_PROMO: brand-only, no required news.
+enum CampaignContentMode {
+  NEWS_DRIVEN
+  SELF_PROMO
 }
 
 model Topic {
@@ -90,6 +101,12 @@ model Post {
   updatedAt    DateTime   @updatedAt
   variants     PostVariant[]
   publishLogs  PublishLog[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([status, scheduledAt])
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([topicId])
+  @@index([sourceNewsId])
 }
 
 model Campaign {
@@ -100,11 +117,13 @@ model Campaign {
   keywords      String
   brandVoice    String?           @db.Text
   theme         CampaignTheme
+  contentMode   CampaignContentMode @default(NEWS_DRIVEN)
   cadence       CampaignCadence
   dayOfWeek     Int?
   hourOfDay     Int?
   timezone      String            @default("Asia/Bangkok")
   customCron    String?
+  scheduleConfig Json?
   platforms     Platform[]
   postsPerRun   Int               @default(1)
   totalPostsCap Int?
@@ -117,6 +136,9 @@ model Campaign {
   updatedAt     DateTime          @updatedAt
   posts         Post[]
   runs          CampaignRun[]
+
+  @@index([status, nextRunAt])
+  @@index([updatedAt(sort: Desc)])
 }
 
 model CampaignRun {
@@ -128,6 +150,8 @@ model CampaignRun {
   ok         Boolean    @default(false)
   postId     String?
   error      String?    @db.Text
+
+  @@index([campaignId, startedAt(sort: Desc)])
 }
 
 model PostVariant {
@@ -156,6 +180,8 @@ model Media {
   prompt      String?     @db.Text
   generatedBy String      @default("gemini")
   createdAt   DateTime    @default(now())
+
+  @@index([variantId])
 }
 
 model PlatformCredential {
@@ -175,4 +201,6 @@ model PublishLog {
   success      Boolean
   remoteId     String?
   errorMessage String?  @db.Text
+
+  @@index([postId, attemptAt(sort: Desc)])
 }

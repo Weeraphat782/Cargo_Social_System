@@ -34,14 +34,13 @@ export async function generateAndUploadImage(options: {
   prompt: string;
   aspect: AspectKey;
   storageKeyPrefix: string;
-  /** Optional folder id under public/reference-images; falls back to REFERENCE_DEFAULT_CATEGORY env. */
+  /** Only used when set — do not set globally via env; keeps image styles diverse. */
   referenceCategory?: string | null;
+  /** Article / post grounding to avoid generic stock look */
+  newsContext?: { title: string; snippet?: string } | null;
 }): Promise<{ imageUrl: string; prompt: string }> {
   const { w, h, label } = ASPECT_PRESETS[options.aspect];
-  const refCategory =
-    options.referenceCategory?.trim() ||
-    process.env.REFERENCE_DEFAULT_CATEGORY?.trim() ||
-    undefined;
+  const refCategory = options.referenceCategory?.trim() || undefined;
 
   const refSet: { styleNotes: string; images: LoadedReferenceImage[] } =
     refCategory
@@ -53,9 +52,17 @@ export async function generateAndUploadImage(options: {
       ? `\n\nReference style notes: ${refSet.styleNotes.trim()}`
       : "";
 
-  const fullPrompt = `${options.prompt}${styleNotesBlock}
+  const nc = options.newsContext;
+  const sourceBlock =
+    nc?.title?.trim() || nc?.snippet?.trim()
+      ? `\n\nSource article (for grounding; reflect this story, not a generic stock look):\nTitle: ${(nc?.title ?? "").trim()}\n${(nc?.snippet ?? "").trim() ? `Details: ${(nc?.snippet ?? "").trim()}\n` : ""}`
+      : "";
 
-Style: professional logistics / supply chain photography, cinematic lighting, clean modern composition, no text overlays, no watermarks, no logos.
+  const fullPrompt = `${options.prompt}${sourceBlock}${styleNotesBlock}
+
+Style: photographic, editorial quality, natural composition, no text overlays, no watermarks, no logos.
+The subject must follow the scene and source description above. Avoid defaulting to cold-chain pharmaceutical boxes, high-tech control rooms, or generic warehouse or dashboard interiors unless the source explicitly describes them.
+Aim for visual variety across different posts; prefer a concrete, story-specific scene over a stock cliché.
 Composition: ${label}, approximately ${w}x${h} pixels.`;
 
   const ai = getGenAI();

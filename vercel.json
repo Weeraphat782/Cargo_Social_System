@@ -2,7 +2,22 @@
   "crons": [
     {
       "path": "/api/cron/agent",
-      "schedule": "0 7 * * *"
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/publish",
+      "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/cron/agent/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/publish/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/campaigns/[id]/run/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

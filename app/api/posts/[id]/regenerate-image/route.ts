@@ -28,14 +28,32 @@ export async function POST(
     return NextResponse.json({ error: "variantId required" }, { status: 400 });
   }
 
-  const variant = await prisma.postVariant.findFirst({
-    where: { id: body.variantId, postId },
-    include: { media: true },
-  });
+  const [variant, post] = await Promise.all([
+    prisma.postVariant.findFirst({
+      where: { id: body.variantId, postId },
+      include: { media: true },
+    }),
+    prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        sourceNews: { select: { title: true, snippet: true } },
+        campaign: { select: { name: true, description: true, keywords: true } },
+      },
+    }),
+  ]);
   if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
 
   const prompt =
-    body.prompt ?? variant.media[0]?.prompt ?? "Professional logistics hero image, no text";
+    body.prompt ?? variant.media[0]?.prompt ?? "Editorial photo hero image, no text; match the post story.";
+
+  const newsContext = post?.sourceNews
+    ? { title: post.sourceNews.title, snippet: post.sourceNews.snippet ?? undefined }
+    : {
+        title: post?.campaign?.name ?? "Brand or campaign content",
+        snippet:
+          [post?.campaign?.description, post?.campaign?.keywords].filter(Boolean).join(" | ") ||
+          undefined,
+      };
 
   try {
     const gen = await generateAndUploadImage({
@@ -43,6 +61,7 @@ export async function POST(
       aspect: aspectFor[variant.platform],
       storageKeyPrefix: `posts/${postId}/${variant.platform.toLowerCase()}`,
       referenceCategory: body.referenceCategory ?? undefined,
+      newsContext,
     });
 
     const media = variant.media[0];

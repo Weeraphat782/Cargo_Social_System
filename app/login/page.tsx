@@ -36,13 +36,14 @@ function LoginForm() {
       <div style={{ textAlign: "center", marginBottom: 36 }}>
         <div style={{
           width: 52, height: 52,
-          background: "var(--accent)",
+          background: "var(--accent-dim)",
+          border: "1px solid var(--border)",
           borderRadius: 14,
           display: "flex", alignItems: "center", justifyContent: "center",
           margin: "0 auto 16px",
-          boxShadow: "0 0 24px var(--accent-glow)",
+          boxShadow: "var(--shadow-sm)",
         }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
           </svg>
         </div>
@@ -86,7 +87,7 @@ function LoginForm() {
           {error && (
             <div style={{
               background: "var(--danger-dim)",
-              border: "1px solid rgba(255,77,106,0.3)",
+              border: "1px solid var(--ring-danger)",
               borderRadius: 8,
               padding: "10px 14px",
               fontSize: 13,
@@ -148,7 +149,7 @@ export default function LoginPage() {
         transform: "translate(-50%, -50%)",
         width: 600,
         height: 600,
-        background: "radial-gradient(circle, rgba(26,140,255,0.08) 0%, transparent 70%)",
+        background: "radial-gradient(circle, var(--tint-hero) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
       <Suspense fallback={<div className="spinner" />}>

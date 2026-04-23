@@ -8,10 +8,21 @@ export async function GET() {
 
   const logs = await prisma.publishLog.findMany({
     orderBy: { attemptAt: "desc" },
-    take: 100,
-    include: {
+    take: 30,
+    select: {
+      id: true,
+      postId: true,
+      platform: true,
+      attemptAt: true,
+      success: true,
+      remoteId: true,
+      errorMessage: true,
       post: {
-        include: { topic: true },
+        select: {
+          id: true,
+          status: true,
+          topic: { select: { name: true } },
+        },
       },
     },
   });

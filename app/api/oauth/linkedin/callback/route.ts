@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { CredentialType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { encryptPayload } from "@/lib/crypto";
+import { getAppBaseUrl } from "@/lib/env";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const err = searchParams.get("error");
-  const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const base = getAppBaseUrl();
 
   if (err || !code) {
     return NextResponse.redirect(new URL(`/settings/connections?linkedin=error`, base));

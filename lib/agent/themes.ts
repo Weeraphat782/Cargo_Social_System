@@ -9,10 +9,10 @@ export type ThemeBundle = {
   tone: string;
   /** What to stress in the image + social hooks */
   angle: string;
-  /** Appended to Gemini image prompt */
+  /** Palette + lighting mood only; image subject must come from news/content, not this field */
   visualStyleNotes: string;
-  /** Folder under public/reference-images/ */
-  referenceCategory: string;
+  /** Optional folder under public/reference-images/ — set only to lock a look */
+  referenceCategory?: string;
   /** Optional image under public/ for UI cards */
   thumbnailPath: string;
 };
@@ -27,8 +27,7 @@ export const THEME_BUNDLES: ThemeBundle[] = [
     angle:
       "Frame every story as proof of operational discipline: validated packaging, documented handoffs, and predictable outcomes for life-science and regulated cargo.",
     visualStyleNotes:
-      "Navy, white, and cool grey palette; clean clinical environment; soft even lighting; premium pharma logistics mood; no busy clutter; no text in frame.",
-    referenceCategory: "logistics-hero",
+      "Navy, white, and cool grey palette; soft even lighting; calm, premium mood.",
     thumbnailPath: "",
   },
   {
@@ -40,8 +39,7 @@ export const THEME_BUNDLES: ThemeBundle[] = [
     angle:
       "Connect industry headlines to visibility and control: real-time monitoring, AI-assisted foresight, and transparent ops without hype.",
     visualStyleNotes:
-      "Teal and electric blue accents; modern control-tower or dashboard feel; subtle tech glow; sharp depth of field; warehouse or ops floor context; no text or UI chrome in the image.",
-    referenceCategory: "warehouse",
+      "Teal and electric blue accents; balanced natural light; forward-looking mood.",
     thumbnailPath: "",
   },
   {
@@ -53,8 +51,7 @@ export const THEME_BUNDLES: ThemeBundle[] = [
     angle:
       "Tie news to response velocity: same-day execution, 24/7 control, and escalation paths for mission-critical freight.",
     visualStyleNotes:
-      "Dramatic but professional; deep orange and crimson highlights on neutral base; sense of motion (runway, jet bridge, tarmac) without motion blur on labels; no text in frame.",
-    referenceCategory: "logistics-hero",
+      "Deep orange and crimson highlights on a neutral base; dramatic but professional lighting; sense of momentum and urgency.",
     thumbnailPath: "",
   },
 ];

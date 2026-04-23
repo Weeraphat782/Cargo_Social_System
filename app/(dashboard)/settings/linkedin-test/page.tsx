@@ -73,7 +73,7 @@ export default function LinkedInTestPage() {
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 640, margin: "0 auto" }}>
       <div style={{ marginBottom: 28 }}>
         <h1 className="page-title">LinkedIn test post</h1>
         <p className="page-subtitle">
@@ -128,7 +128,7 @@ export default function LinkedInTestPage() {
         <div
           style={{
             background: "var(--danger-dim)",
-            border: "1px solid rgba(255,77,106,0.3)",
+            border: "1px solid var(--ring-danger)",
             borderRadius: 10,
             padding: "12px 16px",
             fontSize: 13,
@@ -144,7 +144,7 @@ export default function LinkedInTestPage() {
         <div
           style={{
             background: "var(--success-dim)",
-            border: "1px solid rgba(0,212,170,0.3)",
+            border: "1px solid var(--ring-success)",
             borderRadius: 10,
             padding: "12px 16px",
             marginBottom: 16,

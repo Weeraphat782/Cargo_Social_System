@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { requireEnv } from "@/lib/env";
+import { urlDedupKey, verifyUrl } from "./url-verify";
 
 export type GoogleNewsResult = {
   title: string;
@@ -27,7 +28,9 @@ export async function searchNews(
     key,
     cx,
     q: query,
-    num: String(num),
+    num: String(Math.min(10, num * 2)),
+    sort: "date",
+    dateRestrict: "m6",
   });
 
   const res = await fetch(
@@ -42,13 +45,22 @@ export async function searchNews(
   };
 
   const items: GoogleNewsResult[] = [];
+  const usedKeys = new Set<string>();
+
   for (const it of data.items ?? []) {
     if (!it.link || !it.title) continue;
-    const urlHash = hashUrl(it.link);
+    if (items.length >= num) break;
+    const canonical = await verifyUrl(it.link);
+    if (!canonical) continue;
+    const key = urlDedupKey(canonical);
+    if (usedKeys.has(key)) continue;
+    usedKeys.add(key);
+
+    const urlHash = hashUrl(canonical);
     await prisma.newsItem.upsert({
       where: { urlHash },
       create: {
-        url: it.link,
+        url: canonical,
         urlHash,
         title: it.title,
         snippet: it.snippet ?? null,
@@ -61,19 +73,30 @@ export async function searchNews(
 
     items.push({
       title: it.title,
-      link: it.link,
+      link: canonical,
       snippet: it.snippet ?? "",
     });
+  }
+
+  const cseItemCount = data.items?.length ?? 0;
+  if (items.length < num && cseItemCount > 0) {
+    console.info(
+      `[CSE] Requested up to ${num} verified result(s); got ${items.length} after strict URL check (from ${cseItemCount} CSE item(s))`
+    );
   }
 
   return items;
 }
 
 export async function getOrCreateNewsItem(url: string, title: string, snippet?: string) {
-  const urlHash = hashUrl(url);
+  const canonical = await verifyUrl(url);
+  if (!canonical) {
+    throw new Error(`URL could not be verified: ${url}`);
+  }
+  const urlHash = hashUrl(canonical);
   return prisma.newsItem.upsert({
     where: { urlHash },
-    create: { url, urlHash, title, snippet: snippet ?? null },
+    create: { url: canonical, urlHash, title, snippet: snippet ?? null },
     update: { title, snippet: snippet ?? undefined },
   });
 }

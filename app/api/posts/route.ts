@@ -19,10 +19,34 @@ export async function GET(req: Request) {
       : undefined,
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: {
-      topic: true,
-      sourceNews: true,
-      variants: { include: { media: true } },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      scheduledAt: true,
+      publishedAt: true,
+      failureCount: true,
+      lastError: true,
+      topic: { select: { name: true } },
+      sourceNews: { select: { title: true, url: true } },
+      variants: {
+        orderBy: { platform: "asc" },
+        select: {
+          id: true,
+          platform: true,
+          caption: true,
+          hashtags: true,
+          bodyMd: true,
+          title: true,
+          slug: true,
+          publishedAt: true,
+          remoteId: true,
+          media: {
+            select: { id: true, imageUrl: true },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
     },
   });
 

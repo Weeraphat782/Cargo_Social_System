@@ -8,6 +8,7 @@ export default auth((req) => {
     "/queue",
     "/calendar",
     "/topics",
+    "/campaigns",
     "/settings",
     "/logs",
   ];
@@ -27,6 +28,7 @@ export const config = {
     "/queue/:path*",
     "/calendar/:path*",
     "/topics/:path*",
+    "/campaigns/:path*",
     "/settings/:path*",
     "/logs/:path*",
   ],

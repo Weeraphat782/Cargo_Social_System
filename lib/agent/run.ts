@@ -4,11 +4,16 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Schema } from "@google/genai";
-import { CampaignStatus, Platform, PostStatus } from "@prisma/client";
+import {
+  CampaignContentMode,
+  CampaignStatus,
+  Platform,
+  PostStatus,
+} from "@prisma/client";
 import { addMinutes } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireEnv } from "@/lib/env";
-import { searchNews } from "@/lib/news";
+import { searchNews, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import { OMG_SERVICES, PROMO_GUIDANCE } from "@/lib/agent/promo-config";
@@ -33,12 +38,21 @@ export type DraftJson = {
     sourceTitle: string;
     sourceUrl: string;
   };
-  /** One visual brief for the single shared image reused on all platforms. */
-  imagePrompt: string;
+  /** Content-first visual plan for the single shared image reused on all platforms. */
+  imagePrompt: ImagePromptBlock;
 };
 
-const imagePromptDescription =
-  "Concrete visual brief (2-4 sentences) for ONE hero image shared across Facebook, Instagram, LinkedIn, and OMG. Must fit BOTH the news topic and OMG's promo service angle. Include setting, subjects, lighting, mood. No text/watermarks/logos.";
+/** Structured hero-image plan: subject and elements must follow the source article (or campaign focus for self-promo). */
+export type ImagePromptBlock = {
+  subject: string;
+  keyElements: string[];
+  mood?: string;
+};
+
+const IMAGE_PROMPT_JSON_RULES = `The imagePrompt field MUST be a JSON object with:
+- subject: one sentence for the main scene, using CONCRETE NOUNS from the article title/snippet (or from the campaign / focus for self-promo). Do NOT default to pharmaceutical cold boxes, high-tech control rooms, dashboards, or generic warehouse interiors unless the source explicitly describes them.
+- keyElements: 3-5 short strings (places, objects, people/roles, actions) taken from the same source. No brand names as readable text in the final image.
+- mood: optional 1-4 words. Theme palette and lighting are added later; do not pack environment clichés into subject. No text, watermarks, or logos in the final image.`;
 
 const draftResponseSchema: Schema = {
   type: Type.OBJECT,
@@ -100,12 +114,83 @@ const draftResponseSchema: Schema = {
       required: ["title", "slug", "summary", "bodyMd", "sourceTitle", "sourceUrl"],
     },
     imagePrompt: {
-      type: Type.STRING,
-      description: imagePromptDescription,
+      type: Type.OBJECT,
+      description: IMAGE_PROMPT_JSON_RULES,
+      properties: {
+        subject: {
+          type: Type.STRING,
+          description: "Main visual scene, grounded in the source article (or self-promo focus), not a generic stock cliché.",
+        },
+        keyElements: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "3-5 source-grounded details",
+        },
+        mood: {
+          type: Type.STRING,
+          description: "Optional short mood phrase",
+        },
+      },
+      required: ["subject", "keyElements"],
     },
   },
   required: ["facebook", "instagram", "linkedin", "omg", "imagePrompt"],
 };
+
+/** Default palette for topic-based drafts (no campaign theme). */
+const DEFAULT_NEUTRAL_PALETTE =
+  "Cool professional neutrals; natural balanced lighting; editorial clarity.";
+
+export function normalizeImagePrompt(raw: unknown): ImagePromptBlock {
+  if (raw && typeof raw === "object" && "subject" in (raw as object)) {
+    const o = raw as Record<string, unknown>;
+    const k = o.keyElements;
+    return {
+      subject:
+        String(o.subject ?? "").trim() ||
+        "A scene grounded in the source article; avoid generic warehouse stock photos.",
+      keyElements: Array.isArray(k) ? k.map((x) => String(x)) : [],
+      mood: o.mood != null ? String(o.mood) : undefined,
+    };
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    return { subject: raw.trim(), keyElements: [] };
+  }
+  return {
+    subject:
+      "A specific scene that reflects the source story; not a generic high-tech control room or cold box.",
+    keyElements: [],
+  };
+}
+
+/**
+ * Turn structured image plan + theme palette into a single text brief for Gemini image generation.
+ */
+export function composeImageBrief(
+  block: ImagePromptBlock,
+  options: { paletteHint?: string; defaultMood?: string }
+): string {
+  const subject = block.subject.trim() || "Scene grounded in the source context.";
+  const elements = (block.keyElements ?? [])
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  const mood =
+    (block.mood && block.mood.trim()) ||
+    (options.defaultMood && options.defaultMood.trim()) ||
+    "";
+
+  const lines: string[] = [`Scene: ${subject}.`];
+  if (elements.length) {
+    lines.push(`Key elements: ${elements.join(", ")}.`);
+  }
+  if (mood) {
+    lines.push(`Mood: ${mood}.`);
+  }
+  if (options.paletteHint?.trim()) {
+    lines.push(`Palette / lighting: ${options.paletteHint.trim()}.`);
+  }
+  return lines.join("\n");
+}
 
 function getGenAI(): GoogleGenAI {
   return new GoogleGenAI({ apiKey: requireEnv("GEMINI_API_KEY") });
@@ -121,6 +206,21 @@ function applyOmgSourceFields(
   const citation = `> Source: [${draft.omg.sourceTitle}](${draft.omg.sourceUrl})`;
   if (!draft.omg.bodyMd.includes(draft.omg.sourceUrl)) {
     draft.omg.bodyMd = `${draft.omg.bodyMd.trimEnd()}\n\n${citation}\n`;
+  }
+}
+
+/** SELF_PROMO: OMG page is brand editorial, not a syndicated news article. */
+function applyOmgSelfPromoSourceFields(draft: DraftJson): void {
+  const title = "Original brand content (OMG Experience)";
+  const url =
+    process.env.NEXT_PUBLIC_OMG_SITE_URL ||
+    process.env.OMG_PUBLIC_URL ||
+    "https://www.omg.experience";
+  draft.omg.sourceTitle = title;
+  draft.omg.sourceUrl = url;
+  if (!draft.omg.bodyMd.includes("Original brand content — OMG Experience")) {
+    const line = `> *Original brand content — OMG Experience.*`;
+    draft.omg.bodyMd = `${draft.omg.bodyMd.trimEnd()}\n\n${line}\n`;
   }
 }
 
@@ -164,7 +264,8 @@ Social requirements (promo, NOT news rewrite):
 - Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability.
 
-Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that fits BOTH the news topic and OMG's promo angle. Professional logistics photography. No text/watermarks/logos in the image.`;
+${IMAGE_PROMPT_JSON_RULES}
+Ground the image in the article's title and snippet, not a generic "tech logistics" look.`;
 
   const ai = getGenAI();
   const response = await withGeminiRetry("draftWithGemini", () =>
@@ -182,6 +283,7 @@ Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that fi
   if (!text) throw new Error("Empty Gemini text response for draft");
 
   const parsed = JSON.parse(text) as DraftJson;
+  parsed.imagePrompt = normalizeImagePrompt(parsed.imagePrompt);
   applyOmgSourceFields(parsed, {
     newsTitle: input.newsTitle,
     newsUrl: input.newsUrl,
@@ -221,7 +323,7 @@ ${servicesCatalog}
 Promo guidance:
 ${PROMO_GUIDANCE}
 
-Image direction (MUST reflect in the imagePrompt field): ${input.theme.visualStyleNotes}
+Theme palette (for final image only — will be added at render time, NOT inside imagePrompt): ${input.theme.visualStyleNotes}
 
 OMG newsroom requirements:
 - Write an original news-style article (500-900 words, ## headings, markdown).
@@ -236,7 +338,8 @@ Social requirements (promo, NOT news rewrite):
 - Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability and the campaign theme.
 
-Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that matches the theme and news context. ${input.theme.visualStyleNotes} Professional logistics photography. No text/watermarks/logos in the image.`;
+${IMAGE_PROMPT_JSON_RULES}
+The scene must come from the news article, not the theme name. Theme only influences copy tone; palette is applied at image render time.`;
 
   const ai = getGenAI();
   const response = await withGeminiRetry("draftWithGeminiForCampaign", () =>
@@ -254,10 +357,83 @@ Image prompt: ONE concrete visual brief (2-4 sentences) for a hero image that ma
   if (!text) throw new Error("Empty Gemini text response for campaign draft");
 
   const parsed = JSON.parse(text) as DraftJson;
+  parsed.imagePrompt = normalizeImagePrompt(parsed.imagePrompt);
   applyOmgSourceFields(parsed, {
     newsTitle: input.newsTitle,
     newsUrl: input.newsUrl,
   });
+  return parsed;
+}
+
+export async function draftWithGeminiForPromoCampaign(input: {
+  campaignName: string;
+  description?: string | null;
+  brandVoice?: string | null;
+  /** Themes / services to highlight; may be empty (we still use campaign name) */
+  highlightKeywords: string;
+  theme: ThemeBundle;
+}): Promise<DraftJson> {
+  const servicesCatalog = OMG_SERVICES.map(
+    (s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`
+  ).join("\n");
+
+  const focus =
+    input.highlightKeywords.trim() ||
+    "General OMG value proposition; pick the most relevant OMG services below.";
+
+  const prompt = `You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.
+
+CAMPAIGN (SELF-PROMO — no external news required): ${input.campaignName}
+${input.description ? `Description: ${input.description}` : ""}
+Themes / services to lean into: ${focus}
+
+Theme (visual + voice package): ${input.theme.label}
+Theme angle: ${input.theme.angle}
+Theme tone: ${input.theme.tone}
+Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other OMG services from the catalog.
+Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
+
+This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
+
+OMG services catalog:
+${servicesCatalog}
+
+Promo guidance (social):
+${PROMO_GUIDANCE}
+
+Theme palette (for final image only — not duplicated inside the imagePrompt object): ${input.theme.visualStyleNotes}
+
+Social copy:
+- Facebook: ~100-180 words, clear value + soft CTA, aligned to theme.
+- Instagram: strong hook, hashtags: 15-25, space-separated, each with #
+- LinkedIn: short paragraphs, thought leadership, under 2600 characters.
+
+OMG newsroom / site article (self-promo editorial, NOT a syndicated news piece):
+- Write an **original editorial** (400-800 words, ## markdown headings) explaining why this capability matters, how OMG approaches it, and a soft CTA. No need to reference a real breaking-news URL.
+- Do NOT add a "Source: [external URL]" line for a news site — the article is OMG-originated.
+- slug: kebab-case, unique for this piece.
+
+${IMAGE_PROMPT_JSON_RULES}
+For SELF-PROMO (no news article), base imagePrompt.subject and keyElements on the campaign name, description, and highlight keywords, plus the most relevant OMG service concepts — still avoid empty clichés like "dashboard" or "cold box" unless the copy truly demands it.`;
+
+  const ai = getGenAI();
+  const response = await withGeminiRetry("draftWithGeminiForPromoCampaign", () =>
+    ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: draftResponseSchema,
+      },
+    })
+  );
+
+  const text = response.text;
+  if (!text) throw new Error("Empty Gemini text response for promo campaign draft");
+
+  const parsed = JSON.parse(text) as DraftJson;
+  parsed.imagePrompt = normalizeImagePrompt(parsed.imagePrompt);
+  applyOmgSelfPromoSourceFields(parsed);
   return parsed;
 }
 
@@ -289,10 +465,20 @@ export async function runAgentForCampaign(
       ? (campaign.platforms as Platform[])
       : (["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as Platform[]);
 
-  const num = Math.max(5, campaign.postsPerRun);
-  const results = await searchNews(campaign.keywords, { num });
-  if (!results.length) {
-    throw new Error("No news results returned from search provider");
+  const selfPromo = campaign.contentMode === CampaignContentMode.SELF_PROMO;
+  const BATCH_SPREAD_MINUTES = 5;
+
+  let results: GoogleNewsResult[] = [];
+  if (!selfPromo) {
+    const kw = campaign.keywords.trim();
+    if (!kw) {
+      throw new Error("News-driven campaigns require non-empty keywords for search");
+    }
+    const num = Math.max(5, campaign.postsPerRun);
+    results = await searchNews(kw, { num });
+    if (!results.length) {
+      throw new Error("No news results returned from search provider");
+    }
   }
 
   const postIds: string[] = [];
@@ -302,21 +488,47 @@ export async function runAgentForCampaign(
       const count = await prisma.post.count({ where: { campaignId: campaign.id } });
       if (count >= campaign.totalPostsCap) break;
     }
-    const top = results[i] ?? results[0];
-    if (!top) break;
-    const newsRow = await prisma.newsItem.findFirst({ where: { url: top.link } });
-    if (!newsRow) {
-      throw new Error("NewsItem missing after search");
+
+    let draft: DraftJson;
+    let sourceNewsId: string | null = null;
+
+    if (selfPromo) {
+      draft = await draftWithGeminiForPromoCampaign({
+        campaignName: campaign.name,
+        description: campaign.description,
+        brandVoice: campaign.brandVoice,
+        highlightKeywords: campaign.keywords,
+        theme,
+      });
+    } else {
+      const top = results[i] ?? results[0];
+      if (!top) break;
+      const newsRow = await prisma.newsItem.findFirst({ where: { url: top.link } });
+      if (!newsRow) {
+        throw new Error("NewsItem missing after search");
+      }
+      sourceNewsId = newsRow.id;
+      draft = await draftWithGeminiForCampaign({
+        campaignName: campaign.name,
+        brandVoice: campaign.brandVoice,
+        newsTitle: top.title,
+        newsUrl: top.link,
+        newsSnippet: top.snippet,
+        theme,
+      });
     }
 
-    const draft = await draftWithGeminiForCampaign({
-      campaignName: campaign.name,
-      brandVoice: campaign.brandVoice,
-      newsTitle: top.title,
-      newsUrl: top.link,
-      newsSnippet: top.snippet,
-      theme,
-    });
+    const newsForImage: { title: string; snippet?: string } = selfPromo
+      ? {
+          title: campaign.name,
+          snippet:
+            [campaign.description, campaign.keywords].filter(Boolean).join(" | ") ||
+            undefined,
+        }
+      : (() => {
+          const t = results[i] ?? results[0];
+          return { title: t?.title ?? campaign.name, snippet: t?.snippet };
+        })();
 
     const p0 = platformList[0] ?? "FACEBOOK";
     const aspect: AspectKey = platformList.includes("OMG")
@@ -327,14 +539,18 @@ export async function runAgentForCampaign(
           ? "LINKEDIN"
           : "FACEBOOK";
 
-    let sharedImagePrompt: string = draft.imagePrompt;
+    const imageBrief = composeImageBrief(draft.imagePrompt, {
+      paletteHint: theme.visualStyleNotes,
+    });
+    let sharedImagePrompt = imageBrief;
     let sharedImageUrl = PLACEHOLDER_PNG;
     try {
       const gen = await generateAndUploadImage({
-        prompt: draft.imagePrompt,
+        prompt: imageBrief,
         aspect,
         storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}`,
         referenceCategory: theme.referenceCategory,
+        newsContext: newsForImage,
       });
       sharedImageUrl = gen.imageUrl;
       sharedImagePrompt = gen.prompt;
@@ -369,7 +585,7 @@ export async function runAgentForCampaign(
           data: {
             status: PostStatus.DRAFTING,
             campaignId: campaign.id,
-            sourceNewsId: newsRow.id,
+            sourceNewsId,
           },
         });
 
@@ -403,7 +619,9 @@ export async function runAgentForCampaign(
     const finalStatus = campaign.autoApprove
       ? PostStatus.SCHEDULED
       : PostStatus.PENDING_APPROVAL;
-    const scheduleAt = campaign.autoApprove ? addMinutes(new Date(), 2) : null;
+    const scheduleAt = campaign.autoApprove
+      ? addMinutes(new Date(), 2 + i * BATCH_SPREAD_MINUTES)
+      : null;
 
     await prisma.post.update({
       where: { id: created.id },
@@ -441,13 +659,17 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
     newsSnippet: top.snippet,
   });
 
-  let sharedImagePrompt: string = draft.imagePrompt;
+  const imageBrief = composeImageBrief(draft.imagePrompt, {
+    paletteHint: DEFAULT_NEUTRAL_PALETTE,
+  });
+  let sharedImagePrompt = imageBrief;
   let sharedImageUrl = PLACEHOLDER_PNG;
   try {
     const gen = await generateAndUploadImage({
-      prompt: draft.imagePrompt,
+      prompt: imageBrief,
       aspect: "OMG",
       storageKeyPrefix: `draft/${topicId}/shared`,
+      newsContext: { title: top.title, snippet: top.snippet },
     });
     sharedImageUrl = gen.imageUrl;
     sharedImagePrompt = gen.prompt;

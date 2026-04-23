@@ -39,6 +39,9 @@ yarn-error.log*
 
 # local agent / editor worktrees (do not commit nested repos)
 .claude/
+.agents/
+.impeccable.md
+skills-lock.json
 
 # typescript
 *.tsbuildinfo

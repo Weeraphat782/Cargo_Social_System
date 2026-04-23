@@ -12,10 +12,24 @@ export async function GET(
 
   const post = await prisma.post.findUnique({
     where: { id },
-    include: {
+    select: {
+      id: true,
+      status: true,
+      topicId: true,
+      campaignId: true,
+      sourceNewsId: true,
+      scheduledAt: true,
+      publishedAt: true,
+      failureCount: true,
+      lastError: true,
+      createdAt: true,
+      updatedAt: true,
       topic: true,
       sourceNews: true,
-      variants: { include: { media: true } },
+      variants: {
+        orderBy: { platform: "asc" },
+        include: { media: { orderBy: { createdAt: "asc" } } },
+      },
       publishLogs: { orderBy: { attemptAt: "desc" }, take: 20 },
     },
   });
@@ -60,7 +74,26 @@ export async function PATCH(
 
   const post = await prisma.post.findUnique({
     where: { id },
-    include: { variants: { include: { media: true } } },
+    select: {
+      id: true,
+      status: true,
+      topicId: true,
+      campaignId: true,
+      sourceNewsId: true,
+      scheduledAt: true,
+      publishedAt: true,
+      failureCount: true,
+      lastError: true,
+      createdAt: true,
+      updatedAt: true,
+      topic: true,
+      sourceNews: true,
+      variants: {
+        orderBy: { platform: "asc" },
+        include: { media: { orderBy: { createdAt: "asc" } } },
+      },
+      publishLogs: { orderBy: { attemptAt: "desc" }, take: 20 },
+    },
   });
 
   return NextResponse.json(post);

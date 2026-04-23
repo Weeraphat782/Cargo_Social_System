@@ -22,7 +22,8 @@ Human-in-the-loop social media manager: **Gemini** drafts multi-platform copy (s
    Copy `.env.example` to `.env` and fill values.
 
    - **DATABASE_URL** — Postgres connection string.
-   - **AUTH_SECRET** / **NEXTAUTH_SECRET** — same random string (e.g. `openssl rand -base64 32`).
+   - **AUTH_SECRET** (Auth.js v5; **NEXTAUTH_SECRET** is a legacy alias) — random string (e.g. `openssl rand -base64 32`).
+   - **AUTH_URL** — app origin for redirects (e.g. `http://localhost:3000` in dev; must match the port you run `next dev` on).
    - **ADMIN_EMAIL** / **ADMIN_PASSWORD_HASH** — bcrypt hash of your password:
 
      ```bash
@@ -81,9 +82,9 @@ Open `/login`, then **Topics** → **Run agent now**, or call `POST /api/agent/r
 
 ## Cron (Vercel)
 
-- `vercel.json` schedules:
-  - Daily **agent** run: `/api/cron/agent`
-  - Every **5 minutes** **publish** dispatcher: `/api/cron/publish`
+- `vercel.json` schedules (UTC; see `docs/deploy-vercel.md` for ICT):
+  - Daily **agent** run: `/api/cron/agent` (`0 23 * * *`)
+  - Daily **publish** dispatcher: `/api/cron/publish` (`0 0 * * *`)
 - Set `CRON_SECRET` for manual/self-hosted calls with `Authorization: Bearer <CRON_SECRET>` or `?secret=`.
 - On Vercel, scheduled invocations send `x-vercel-cron: 1` (handled in code).
 - **Local dev:** `npm run dev` runs an in-process scheduler (~every 60s) for due `SCHEDULED` posts, and the **Queue** page has **Run scheduler now** (`POST /api/cron/publish/manual`, session auth).

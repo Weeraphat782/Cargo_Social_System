@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const serverSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
+  AUTH_SECRET: z.string().min(1).optional(),
+  AUTH_URL: z.string().url().optional(),
   NEXTAUTH_SECRET: z.string().min(1).optional(),
   NEXTAUTH_URL: z.string().url().optional(),
   ADMIN_EMAIL: z.string().email().optional(),
@@ -52,4 +54,9 @@ export function requireEnv<K extends keyof ServerEnv>(
     throw new Error(`Missing required environment variable: ${String(key)}`);
   }
   return v as NonNullable<ServerEnv[K]>;
+}
+
+/** Public app origin for redirects (Auth.js v5 uses AUTH_URL; NEXTAUTH_URL is legacy). */
+export function getAppBaseUrl(): string {
+  return process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 }

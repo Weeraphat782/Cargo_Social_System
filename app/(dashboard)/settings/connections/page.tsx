@@ -91,7 +91,7 @@ function ConnectionsInner() {
   }
 
   return (
-    <div style={{ maxWidth: 700 }}>
+    <div style={{ maxWidth: 700, margin: "0 auto" }}>
       <div style={{ marginBottom: 28 }}>
         <h1 className="page-title">Platform Connections</h1>
         <p className="page-subtitle">Connect your social media accounts to enable automated posting.</p>
@@ -100,7 +100,7 @@ function ConnectionsInner() {
       {msg && (
         <div style={{
           background: msg.type === "success" ? "var(--success-dim)" : "var(--danger-dim)",
-          border: `1px solid ${msg.type === "success" ? "rgba(0,212,170,0.3)" : "rgba(255,77,106,0.3)"}`,
+          border: `1px solid ${msg.type === "success" ? "var(--ring-success)" : "var(--ring-danger)"}`,
           borderRadius: 10,
           padding: "12px 16px",
           fontSize: 13,
@@ -122,7 +122,7 @@ function ConnectionsInner() {
           title="Meta — Facebook & Instagram"
           connected={metaOk}
           icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4d9fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--fb)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />
             </svg>
           }
@@ -178,7 +178,7 @@ function ConnectionsInner() {
           title="LinkedIn — Personal Profile"
           connected={liOk}
           icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5ba8f5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--li)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z" />
               <rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" />
             </svg>
@@ -195,9 +195,9 @@ function ConnectionsInner() {
               style={{
                 display: "inline-flex", alignItems: "center", gap: 7,
                 padding: "9px 16px", borderRadius: 8,
-                background: "rgba(10,102,194,0.2)",
-                border: "1px solid rgba(10,102,194,0.4)",
-                color: "#5ba8f5", fontSize: 13, fontWeight: 600,
+                background: "var(--li-dim-bg)",
+                border: "1px solid var(--ring-li)",
+                color: "var(--li)", fontSize: 13, fontWeight: 600,
                 textDecoration: "none",
                 transition: "background 0.15s",
               }}

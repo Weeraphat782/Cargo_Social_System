@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { getAppBaseUrl } from "@/lib/env";
 
 /** Start LinkedIn OAuth (requires logged-in admin). */
 export async function GET() {
   const session = await auth();
   if (!session) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL ?? "http://localhost:3000"));
+    return NextResponse.redirect(new URL("/login", getAppBaseUrl()));
   }
 
   const clientId = process.env.LINKEDIN_CLIENT_ID;

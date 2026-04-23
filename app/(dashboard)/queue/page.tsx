@@ -26,7 +26,7 @@ type Post = {
     bodyMd: string | null;
     publishedAt: string | null;
     remoteId: string | null;
-    media: Array<{ id: string; imageUrl: string; prompt?: string | null }>;
+    media: Array<{ id: string; imageUrl: string }>;
   }>;
 };
 
@@ -45,6 +45,16 @@ const statusBadge: Record<string, string> = {
   REJECTED:         "omg-badge-rejected",
   SCHEDULED:        "omg-badge-scheduled",
 };
+
+const PLATFORM_ORDER = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as const;
+
+function sortByPlatform<T extends { platform: string }>(variants: T[]): T[] {
+  return [...variants].sort((a, b) => {
+    const ia = PLATFORM_ORDER.indexOf(a.platform as (typeof PLATFORM_ORDER)[number]);
+    const ib = PLATFORM_ORDER.indexOf(b.platform as (typeof PLATFORM_ORDER)[number]);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
 
 export default function QueuePage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -69,6 +79,7 @@ export default function QueuePage() {
   const [variationsLoading, setVariationsLoading] = useState<Record<string, boolean>>({});
   const [regenLoading, setRegenLoading] = useState<Record<string, boolean>>({});
   const [selectLoading, setSelectLoading] = useState<Record<string, boolean>>({});
+  const [activePlatformTab, setActivePlatformTab] = useState<Record<string, string>>({});
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -276,7 +287,7 @@ export default function QueuePage() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -298,17 +309,17 @@ export default function QueuePage() {
         style={{
           marginBottom: 20,
           padding: "14px 18px",
-          border: "1px solid rgba(26,140,255,0.35)",
-          background: "rgba(26,140,255,0.06)",
+          border: "1px solid var(--ring-accent)",
+          background: "color-mix(in srgb, var(--accent) 5%, var(--bg-card))",
         }}
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
           <div style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 520 }}>
             <strong style={{ color: "var(--text-primary)" }}>Scheduled posts</strong> publish when{" "}
-            <code style={{ background: "rgba(26,140,255,0.15)", padding: "1px 6px", borderRadius: 4 }}>/api/cron/publish</code>{" "}
+            <code style={{ background: "var(--inline-code-bg)", padding: "1px 6px", borderRadius: 4 }}>/api/cron/publish</code>{" "}
             runs (every 5 min on Vercel). On <strong>local dev</strong>, run the scheduler below or wait ~60s for the dev loop.
-            Set <code style={{ background: "rgba(26,140,255,0.15)", padding: "1px 6px", borderRadius: 4 }}>CRON_SECRET</code> in{" "}
-            <code style={{ background: "rgba(26,140,255,0.15)", padding: "1px 6px", borderRadius: 4 }}>.env</code> for curl.
+            Set <code style={{ background: "var(--inline-code-bg)", padding: "1px 6px", borderRadius: 4 }}>CRON_SECRET</code> in{" "}
+            <code style={{ background: "var(--inline-code-bg)", padding: "1px 6px", borderRadius: 4 }}>.env</code> for curl.
           </div>
           <button
             type="button"
@@ -339,41 +350,114 @@ export default function QueuePage() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {posts.map(post => (
+          {posts.map((post) => {
+            const thumbUrl =
+              post.variants.map((v) => v.media[0]?.imageUrl).find(Boolean) ?? null;
+            const ex = (post.variants[0]?.caption || post.sourceNews?.title || "").trim();
+            const excerpt = ex.length > 180 ? `${ex.slice(0, 180)}…` : ex;
+            return (
             <div key={post.id} className="omg-card" style={{ overflow: "hidden" }}>
-              {/* Post header */}
-              <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
+              <div
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (expanded === post.id) setExpanded(null);
+                    else {
+                      const sorted = sortByPlatform(post.variants);
+                      setActivePlatformTab((prev) => ({
+                        ...prev,
+                        [post.id]: sorted[0]?.platform ?? "FACEBOOK",
+                      }));
+                      setExpanded(post.id);
+                    }
+                  }
+                }}
+                onClick={() => {
+                  if (expanded === post.id) {
+                    setExpanded(null);
+                  } else {
+                    const sorted = sortByPlatform(post.variants);
+                    setActivePlatformTab((prev) => ({
+                      ...prev,
+                      [post.id]: sorted[0]?.platform ?? "FACEBOOK",
+                    }));
+                    setExpanded(post.id);
+                  }
+                }}
+                style={{
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 14,
+                  cursor: "pointer",
+                }}
+              >
+                <div
+                  style={{
+                    width: 92,
+                    height: 92,
+                    borderRadius: 10,
+                    flexShrink: 0,
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border)",
+                    overflow: "hidden",
+                  }}
+                >
+                  {thumbUrl ? (
+                    <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 28,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      📝
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
                       {post.topic?.name ?? "Post"}
                     </span>
                     <span className={`omg-badge ${statusBadge[post.status] ?? "omg-badge-pending"}`}>
                       {post.status.replace("_", " ")}
                     </span>
                   </div>
-                  {post.sourceNews && (
-                    <a
-                      href={post.sourceNews.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", display: "block", marginBottom: 4 }}
-                      onMouseEnter={e => (e.currentTarget.style.textDecoration = "underline")}
-                      onMouseLeave={e => (e.currentTarget.style.textDecoration = "none")}
-                    >
-                      📰 {post.sourceNews.title}
-                    </a>
-                  )}
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
-                    {post.variants.map(v => (
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
+                    {sortByPlatform(post.variants).map((v) => (
                       <span key={v.id} className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
                         {platformMeta[v.platform]?.label ?? v.platform}
                       </span>
                     ))}
                   </div>
+                  {excerpt && (
+                    <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                      {excerpt}
+                    </p>
+                  )}
+                  {post.sourceNews && (
+                    <a
+                      href={post.sourceNews.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", display: "inline-block" }}
+                    >
+                      📰 {post.sourceNews.title}
+                    </a>
+                  )}
                   {post.status === "SCHEDULED" && post.scheduledAt && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: "var(--purple)", fontWeight: 600 }}>
-                      Scheduled for{" "}
+                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--purple)", fontWeight: 600 }}>
+                      Scheduled:{" "}
                       {new Date(post.scheduledAt).toLocaleString(undefined, {
                         weekday: "short",
                         month: "short",
@@ -385,34 +469,72 @@ export default function QueuePage() {
                     </div>
                   )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     {new Date(post.createdAt).toLocaleDateString()}
                   </span>
-                  <button
+                  <span
                     className="omg-btn-ghost"
-                    style={{ padding: "6px 12px", fontSize: 12 }}
-                    onClick={() => setExpanded(expanded === post.id ? null : post.id)}
+                    style={{ padding: "6px 10px", fontSize: 12, pointerEvents: "none" }}
+                    aria-hidden
                   >
-                    {expanded === post.id ? (
-                      <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15" /></svg> Hide</>
-                    ) : (
-                      <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg> Edit</>
-                    )}
-                  </button>
+                    {expanded === post.id ? "▲" : "▼"}
+                  </span>
                 </div>
               </div>
 
               {/* Expanded variants */}
               {expanded === post.id && (
-                <div style={{ borderTop: "1px solid var(--border)", padding: "20px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 14, marginBottom: 16 }}>
-                    {post.variants.map(v => (
+                <div style={{ borderTop: "1px solid var(--border)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      padding: "12px 20px 0",
+                      background: "var(--bg-elevated)",
+                      borderBottom: "1px solid var(--border-muted)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {sortByPlatform(post.variants).map((v) => {
+                      const defPlat = sortByPlatform(post.variants)[0]?.platform;
+                      const active = (activePlatformTab[post.id] ?? defPlat) === v.platform;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() =>
+                            setActivePlatformTab((prev) => ({ ...prev, [post.id]: v.platform }))
+                          }
+                          className="omg-btn-ghost"
+                          style={{
+                            fontSize: 12,
+                            padding: "6px 12px",
+                            background: active ? "var(--accent-dim)" : "var(--bg-surface)",
+                            borderColor: active ? "var(--ring-accent)" : "var(--border)",
+                            fontWeight: active ? 600 : 500,
+                          }}
+                        >
+                          {platformMeta[v.platform]?.label ?? v.platform}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ padding: "0 20px 20px" }}>
+                    {post.variants
+                      .filter(
+                        (v) =>
+                          v.platform ===
+                          (activePlatformTab[post.id] ?? sortByPlatform(post.variants)[0]?.platform)
+                      )
+                      .map((v) => (
                       <div key={v.id} style={{
                         background: "var(--bg-surface)",
                         border: "1px solid var(--border-muted)",
                         borderRadius: 10,
                         padding: 14,
+                        marginTop: 16,
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                           <span className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
@@ -445,7 +567,7 @@ export default function QueuePage() {
                               className="omg-input"
                               style={{ fontSize: 12, padding: "8px 10px", resize: "vertical", minHeight: 72 }}
                               rows={3}
-                              value={promptDrafts[v.id] ?? v.media[0]?.prompt ?? ""}
+                              value={promptDrafts[v.id] ?? ""}
                               placeholder="Describe the image you want…"
                               onChange={e =>
                                 setPromptDrafts(prev => ({ ...prev, [v.id]: e.target.value }))
@@ -480,7 +602,7 @@ export default function QueuePage() {
                                 onClick={async () => {
                                   setRegenLoading(prev => ({ ...prev, [v.id]: true }));
                                   const prompt =
-                                    (promptDrafts[v.id] ?? v.media[0]?.prompt ?? "").trim() ||
+                                    (promptDrafts[v.id] ?? "").trim() ||
                                     "Professional logistics hero image, no text";
                                   const refCat = refCategoryByVariant[v.id]?.trim();
                                   try {
@@ -567,7 +689,7 @@ export default function QueuePage() {
                                 onClick={async () => {
                                   setVariationsLoading(prev => ({ ...prev, [v.id]: true }));
                                   const prompt =
-                                    (promptDrafts[v.id] ?? v.media[0]?.prompt ?? "").trim() ||
+                                    (promptDrafts[v.id] ?? "").trim() ||
                                     "Professional logistics hero image, no text";
                                   const refCat = refCategoryByVariant[v.id]?.trim();
                                   try {
@@ -841,7 +963,16 @@ export default function QueuePage() {
                   </div>
 
                   {/* Action buttons */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, paddingTop: 12, borderTop: "1px solid var(--border-muted)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                      padding: "12px 20px 20px",
+                      borderTop: "1px solid var(--border-muted)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button className="omg-btn-ghost" style={{ fontSize: 13 }} onClick={() => saveEdits(post)}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                       Save edits
@@ -859,7 +990,7 @@ export default function QueuePage() {
                         </button>
                         <button
                           className="omg-btn-ghost"
-                          style={{ fontSize: 13, color: "var(--purple)", borderColor: "rgba(167,139,250,0.3)" }}
+                          style={{ fontSize: 13, color: "var(--purple)", borderColor: "var(--ring-purple)" }}
                           onClick={() => openScheduleModal(post.id)}
                         >
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -892,24 +1023,9 @@ export default function QueuePage() {
                   </div>
                 </div>
               )}
-
-              {/* Quick publish for approved (collapsed) */}
-              {post.status === "APPROVED" && expanded !== post.id && (
-                <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border-muted)", background: "var(--bg-surface)" }}>
-                  <button
-                    className="omg-btn-primary"
-                    style={{ fontSize: 12, padding: "7px 14px" }}
-                    disabled={publishing === post.id}
-                    onClick={() => publishNow(post.id)}
-                  >
-                    {publishing === post.id ? <><span className="spinner" /> Publishing…</> : (
-                      <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Publish now</>
-                    )}
-                  </button>
-                </div>
-              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -918,7 +1034,7 @@ export default function QueuePage() {
         <div
           onClick={closeScheduleModal}
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+            position: "fixed", inset: 0, background: "var(--overlay-scrim)",
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 1000, padding: 20, backdropFilter: "blur(3px)",
           }}
@@ -946,7 +1062,7 @@ export default function QueuePage() {
                 <input
                   type="date"
                   className="omg-input"
-                  style={{ fontSize: 14, padding: "10px 12px", width: "100%", colorScheme: "dark" }}
+                  style={{ fontSize: 14, padding: "10px 12px", width: "100%", colorScheme: "light" }}
                   value={scheduleDate}
                   min={new Date().toISOString().slice(0, 10)}
                   onChange={e => setScheduleDate(e.target.value)}
@@ -959,7 +1075,7 @@ export default function QueuePage() {
                 <input
                   type="time"
                   className="omg-input"
-                  style={{ fontSize: 14, padding: "10px 12px", width: "100%", colorScheme: "dark" }}
+                  style={{ fontSize: 14, padding: "10px 12px", width: "100%", colorScheme: "light" }}
                   value={scheduleTime}
                   onChange={e => setScheduleTime(e.target.value)}
                 />
