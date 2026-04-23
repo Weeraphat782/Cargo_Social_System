@@ -5,6 +5,7 @@ import {
   Prisma,
   type Platform,
 } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
@@ -255,6 +256,7 @@ export async function PATCH(
   }
 
   const c = await prisma.campaign.update({ where: { id }, data: u });
+  revalidateTag("campaigns");
   return NextResponse.json(c);
 }
 
@@ -270,5 +272,6 @@ export async function DELETE(
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  revalidateTag("campaigns");
   return NextResponse.json({ ok: true });
 }

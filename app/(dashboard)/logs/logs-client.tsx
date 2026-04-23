@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { ScrollText } from "lucide-react";
+import { PageHeader, StatCard } from "@/components/ui";
 
 export type LogRow = {
   id: string;
@@ -39,53 +42,53 @@ export default function LogsClient({ initialLogs }: { initialLogs: LogRow[] }) {
 
   const successCount = logs.filter(l => l.success).length;
   const failedCount = logs.filter(l => !l.success).length;
+  const rate = logs.length ? successCount / logs.length : 0;
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="page-title">Publish Logs</h1>
-        <p className="page-subtitle">History of all publish attempts across platforms.</p>
-      </div>
+      <PageHeader
+        title="Publish Logs"
+        subtitle="History of all publish attempts across platforms."
+        icon={<ScrollText size={28} strokeWidth={1.75} />}
+      />
 
-      {/* Stats bar */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <div className="omg-card" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>{logs.length}</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Total attempts</span>
-        </div>
-        <div className="omg-card" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--success)" }}>{successCount}</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Successful</span>
-        </div>
-        <div className="omg-card" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--danger)" }}>{failedCount}</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Failed</span>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          {(["all", "success", "failed"] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-                border: "1px solid",
-                borderColor: filter === f ? "var(--border-focus)" : "var(--border)",
-                background: filter === f ? "var(--accent-dim)" : "transparent",
-                color: filter === f ? "var(--accent)" : "var(--text-secondary)",
-                cursor: "pointer", transition: "all 0.15s",
-                textTransform: "capitalize",
-              }}
-            >
-              {f}
-            </button>
-          ))}
-          <button className="omg-btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={load}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-            </svg>
-            Refresh
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <StatCard label="Total attempts" value={logs.length} />
+        <StatCard label="Successful" value={successCount} trend={rate >= 0.5 ? "up" : "flat"} />
+        <StatCard label="Failed" value={failedCount} trend={failedCount > 0 ? "down" : "flat"} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+        {(["all", "success", "failed"] as const).map(f => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            style={{
+              padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
+              border: "1px solid",
+              borderColor: filter === f ? "var(--border-focus)" : "var(--border)",
+              background: filter === f ? "var(--accent-dim)" : "transparent",
+              color: filter === f ? "var(--accent)" : "var(--text-secondary)",
+              cursor: "pointer", transition: "all 0.15s",
+              textTransform: "capitalize",
+            }}
+          >
+            {f}
           </button>
-        </div>
+        ))}
+        <button type="button" className="omg-btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={load}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+          </svg>
+          Refresh
+        </button>
       </div>
 
       {/* Table */}
@@ -108,8 +111,13 @@ export default function LogsClient({ initialLogs }: { initialLogs: LogRow[] }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(l => (
-                  <tr key={l.id}>
+                {filtered.map((l, idx) => (
+                  <motion.tr
+                    key={l.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(0.25, idx * 0.02), duration: 0.2 }}
+                  >
                     <td style={{ whiteSpace: "nowrap", fontSize: 12 }}>
                       {new Date(l.attemptAt).toLocaleString()}
                     </td>
@@ -144,7 +152,7 @@ export default function LogsClient({ initialLogs }: { initialLogs: LogRow[] }) {
                         <span style={{ color: "var(--text-muted)" }}>—</span>
                       )}
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>

@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Link2 } from "lucide-react";
+import { PageHeader } from "@/components/ui";
 
 function ConnectionCard({
   title,
@@ -15,7 +17,7 @@ function ConnectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="omg-card" style={{ padding: "22px 24px" }}>
+    <div className="omg-card is-interactive" style={{ padding: "22px 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
@@ -29,13 +31,27 @@ function ConnectionCard({
           </div>
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>{title}</h2>
         </div>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-          background: connected ? "var(--success-dim)" : "var(--warning-dim)",
-          color: connected ? "var(--success)" : "var(--warning)",
-          textTransform: "uppercase", letterSpacing: "0.05em",
-        }}>
-          {connected ? "✓ Connected" : "Not connected"}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            padding: "4px 10px",
+            borderRadius: 20,
+            background: connected ? "var(--success-dim)" : "var(--warning-dim)",
+            color: connected ? "var(--success)" : "var(--warning)",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {connected ? (
+            <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
+          ) : (
+            <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
+          )}
+          {connected ? "Connected" : "Not connected"}
         </span>
       </div>
       {children}
@@ -92,10 +108,11 @@ function ConnectionsInner() {
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto" }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="page-title">Platform Connections</h1>
-        <p className="page-subtitle">Connect your social media accounts to enable automated posting.</p>
-      </div>
+      <PageHeader
+        title="Platform Connections"
+        subtitle="Connect your social media accounts to enable automated posting."
+        icon={<Link2 size={28} strokeWidth={1.75} />}
+      />
 
       {msg && (
         <div style={{

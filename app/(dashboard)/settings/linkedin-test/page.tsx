@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Share2 } from "lucide-react";
+import { PageHeader } from "@/components/ui";
 
 type LiStatus = { connected: boolean; personUrn?: string };
 
@@ -74,13 +76,11 @@ export default function LinkedInTestPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 className="page-title">LinkedIn test post</h1>
-        <p className="page-subtitle">
-          Upload an image and caption, then post directly to your connected LinkedIn profile. This bypasses
-          topics and drafts.
-        </p>
-      </div>
+      <PageHeader
+        title="LinkedIn test post"
+        subtitle="Upload an image and caption, then post directly to your connected LinkedIn profile. This bypasses topics and drafts."
+        icon={<Share2 size={28} strokeWidth={1.75} />}
+      />
 
       {li === null && (
         <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Checking LinkedIn connection…</p>

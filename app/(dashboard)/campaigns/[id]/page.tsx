@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { FileStack } from "lucide-react";
 import type { Campaign, CampaignRun, CampaignStatus } from "@prisma/client";
+import { CountdownRing, PageHeader, ProgressBar, Skeleton } from "@/components/ui";
 
 type CampaignPost = {
   id: string;
@@ -152,7 +154,13 @@ export default function CampaignDetailPage() {
   }
 
   if (loading) {
-    return <p style={{ color: "var(--text-muted)" }}>Loading…</p>;
+    return (
+      <div style={{ maxWidth: 900 }}>
+        <Skeleton variant="card" height={100} style={{ marginBottom: 12 }} />
+        <Skeleton variant="line" width="100%" height={20} style={{ marginBottom: 8 }} />
+        <Skeleton variant="line" width="60%" height={14} />
+      </div>
+    );
   }
   if (!c) {
     return (
@@ -189,18 +197,45 @@ export default function CampaignDetailPage() {
       </button>
     );
 
+  const publishedN = c.posts.filter((p) => p.status === "PUBLISHED").length;
+  const cap = c.totalPostsCap;
+  const barMax = cap != null ? cap : Math.max(8, publishedN + 3);
+
   return (
     <div>
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 12 }}>
         <Link href="/campaigns" style={{ fontSize: 12, color: "var(--accent)" }}>
           ← Campaigns
         </Link>
       </div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{c.name}</h1>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-        {c.status} · {c.contentMode} · {c.cadence} · theme {c.theme} · {c.timezone}
-      </p>
-      {c.description && <p style={{ maxWidth: 640 }}>{c.description}</p>}
+      <PageHeader
+        title={c.name}
+        subtitle={`${c.status} · ${c.contentMode} · ${c.cadence} · theme ${c.theme} · ${c.timezone}`}
+        icon={<FileStack size={28} strokeWidth={1.75} />}
+      />
+      <div
+        className="omg-card is-interactive"
+        style={{
+          padding: 16,
+          marginBottom: 20,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 20,
+          alignItems: "center",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <ProgressBar
+            value={publishedN}
+            max={barMax}
+            label={cap != null ? "Published / cap" : "Published posts (relative scale)"}
+          />
+        </div>
+        {c.nextRunAt != null ? (
+          <CountdownRing targetIso={new Date(c.nextRunAt as Date | string).toISOString()} label="Next run" size={56} />
+        ) : null}
+      </div>
+      {c.description && <p style={{ maxWidth: 640, marginTop: 0 }}>{c.description}</p>}
 
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 16 }}>
         {primaryStatusButton}
@@ -225,6 +260,15 @@ export default function CampaignDetailPage() {
             </option>
           ))}
         </select>
+        {c.status !== "COMPLETED" && (
+          <Link
+            href={`/campaigns/${id}/edit`}
+            className="omg-btn-ghost"
+            style={{ fontSize: 12, textDecoration: "none" }}
+          >
+            Edit
+          </Link>
+        )}
         <button type="button" className="omg-btn-danger" onClick={() => void remove()}>
           Delete
         </button>

@@ -110,10 +110,6 @@ export function DashboardTopbar() {
       </nav>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Link href="/campaigns" className="omg-btn-primary" style={{ padding: "8px 16px", fontSize: 13 }}>
-          + New campaign
-        </Link>
-
         <div ref={menuRef} style={{ position: "relative" }}>
           <button
             type="button"

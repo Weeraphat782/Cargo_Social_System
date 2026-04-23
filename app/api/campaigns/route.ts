@@ -9,8 +9,10 @@ import {
 } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { fetchCampaignsListForPage } from "@/lib/campaigns-list-payload";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
+import { revalidateTag } from "next/cache";
 
 const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
 
@@ -18,22 +20,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const campaigns = await prisma.campaign.findMany({
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      theme: true,
-      contentMode: true,
-      cadence: true,
-      keywords: true,
-      nextRunAt: true,
-      autoApprove: true,
-      timezone: true,
-      _count: { select: { posts: true, runs: true } },
-    },
-  });
+  const campaigns = await fetchCampaignsListForPage();
   return NextResponse.json(campaigns);
 }
 
@@ -192,5 +179,6 @@ export async function POST(req: Request) {
     },
   });
 
+  revalidateTag("campaigns");
   return NextResponse.json(c);
 }

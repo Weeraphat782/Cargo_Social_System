@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LayoutDashboard } from "lucide-react";
+import { CountdownRing, PageHeader, ProgressBar, StatCard } from "@/components/ui";
 
 export type DashboardStats = {
   pending: number;
@@ -138,18 +140,19 @@ export default function DashboardClient({
   }
 
   const statCards = [
-    { label: "Pending review", value: stats.pending, color: "var(--warning)", href: "/queue" },
-    { label: "Approved", value: stats.approved, color: "var(--success)", href: "/queue" },
-    { label: "Scheduled", value: stats.scheduled, color: "var(--info)", href: "/calendar" },
-    { label: "Published", value: stats.published, color: "var(--success)", href: "/logs" },
+    { label: "Pending review", value: stats.pending, href: "/queue" as const },
+    { label: "Approved", value: stats.approved, href: "/queue" as const },
+    { label: "Scheduled", value: stats.scheduled, href: "/calendar" as const },
+    { label: "Published", value: stats.published, href: "/logs" as const },
   ];
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-subtitle">Campaigns, upcoming posts, and queue health at a glance.</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Campaigns, upcoming posts, and queue health at a glance."
+        icon={<LayoutDashboard size={28} strokeWidth={1.75} />}
+      />
 
       <div
         className="dashboard-grid"
@@ -210,14 +213,15 @@ export default function DashboardClient({
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
               {campaigns.map((c) => {
                 const cap = c.totalPostsCap;
+                const maxCap = cap ?? Math.max(1, c.publishedCount, c._count.posts, 1);
                 const progressLabel =
                   cap != null
                     ? `${c.publishedCount} published / cap ${cap}`
                     : `${c.publishedCount} published · ${c._count.posts} post${c._count.posts === 1 ? "" : "s"}`;
                 return (
-                  <li key={c.id} className="omg-card" style={{ padding: "14px 16px", background: "var(--bg-surface)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-                      <div style={{ minWidth: 0 }}>
+                  <li key={c.id} className="omg-card is-interactive" style={{ padding: "14px 16px", background: "var(--bg-surface)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
                         <Link href={`/campaigns/${c.id}`} style={{ fontWeight: 600, color: "var(--text-primary)", textDecoration: "none", fontSize: 15 }}>
                           {c.name}
                         </Link>
@@ -237,8 +241,10 @@ export default function DashboardClient({
                             );
                           })}
                         </div>
-                        <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>{progressLabel}</p>
+                        <p style={{ margin: "8px 0 4px", fontSize: 12, color: "var(--text-secondary)" }}>{progressLabel}</p>
+                        <ProgressBar value={c.publishedCount} max={maxCap} label="Progress" compact />
                       </div>
+                      {c.nextRunAt ? <CountdownRing targetIso={c.nextRunAt} label="Next run" size={50} /> : null}
                     </div>
                   </li>
                 );
@@ -274,9 +280,13 @@ export default function DashboardClient({
                         padding: "10px 16px",
                         borderBottom: "1px solid var(--border-muted)",
                         display: "grid",
-                        gap: 4,
+                        gridTemplateColumns: "auto 1fr",
+                        gap: 8,
+                        alignItems: "start",
                       }}
                     >
+                      <CountdownRing targetIso={p.scheduledAt} label="Publish" size={44} />
+                      <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                         <span suppressHydrationWarning style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatScheduleTime(p.scheduledAt)}</span>
                         <span className={`platform-pill ${pill.cls}`}>{pill.label}</span>
@@ -287,6 +297,7 @@ export default function DashboardClient({
                       {p.captionSnippet ? (
                         <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{p.captionSnippet}</p>
                       ) : null}
+                      </div>
                     </li>
                   );
                 })}
@@ -379,17 +390,14 @@ export default function DashboardClient({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
           gap: 12,
           marginTop: 24,
         }}
       >
         {statCards.map((s) => (
-          <Link key={s.label} href={s.href} style={{ textDecoration: "none" }}>
-            <div className="omg-card" style={{ padding: "18px 20px", cursor: "pointer" }}>
-              <div style={{ fontSize: 30, fontWeight: 800, color: s.color, lineHeight: 1, fontFamily: "var(--font-bricolage, var(--font-funnel, sans-serif))" }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, fontWeight: 500 }}>{s.label}</div>
-            </div>
+          <Link key={s.label} href={s.href} style={{ textDecoration: "none", color: "inherit" }}>
+            <StatCard label={s.label} value={s.value} />
           </Link>
         ))}
       </div>

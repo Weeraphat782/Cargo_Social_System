@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Hash } from "lucide-react";
+import { MotionList, PageHeader } from "@/components/ui";
 
 type Topic = {
   id: string;
@@ -124,25 +126,24 @@ export default function TopicsClient({ initialTopics }: { initialTopics: Topic[]
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 className="page-title">Topics</h1>
-          <p className="page-subtitle">AI searches Google for news on each topic, then drafts posts for all platforms.</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="omg-btn-ghost" onClick={() => setShowForm(!showForm)}>
+      <PageHeader
+        title="Topics"
+        subtitle="AI searches Google for news on each topic, then drafts posts for all platforms."
+        icon={<Hash size={28} strokeWidth={1.75} />}
+        actions={
+          <button type="button" className="omg-btn-ghost" onClick={() => setShowForm(!showForm)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Add manually
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── AI Suggest Banner ── */}
       <div
-        className="omg-card"
+        className="omg-card is-interactive"
         style={{
           padding: "22px 24px",
           marginBottom: 20,
@@ -341,11 +342,11 @@ export default function TopicsClient({ initialTopics }: { initialTopics: Topic[]
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 10, paddingLeft: 4 }}>
             {topics.length} topic{topics.length !== 1 ? "s" : ""} active
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <MotionList style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {topics.map(t => {
               const result = runResult[t.id];
               return (
-                <div key={t.id} className="omg-card" style={{ padding: "16px 20px" }}>
+                <div key={t.id} className="omg-card is-interactive" style={{ padding: "16px 20px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 200 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
@@ -415,7 +416,7 @@ export default function TopicsClient({ initialTopics }: { initialTopics: Topic[]
                 </div>
               );
             })}
-          </div>
+          </MotionList>
         </>
       )}
     </div>

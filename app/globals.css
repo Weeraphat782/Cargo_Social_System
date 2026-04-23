@@ -69,6 +69,23 @@
   --ig: #e1306c;
   --li: #0a66c2;
   --omg: var(--brand-navy);
+
+  /* Polish kit — gradients, motion, skeleton */
+  --gradient-brand: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand-navy) 8%, var(--bg-surface)) 0%,
+    color-mix(in srgb, var(--brand-green) 6%, var(--bg-surface)) 50%,
+    var(--bg-surface) 100%
+  );
+  --gradient-warm: linear-gradient(90deg, var(--warning-dim) 0%, var(--navy-dim) 100%);
+  --gradient-cool: linear-gradient(90deg, var(--navy-dim) 0%, var(--success-dim) 100%);
+  --hover-lift: -2px;
+  --shimmer-bg: linear-gradient(
+    90deg,
+    var(--bg-elevated) 0%,
+    var(--bg-surface) 50%,
+    var(--bg-elevated) 100%
+  );
 }
 
 @theme inline {
@@ -131,6 +148,17 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+/* Interactive card — stronger lift (opt-in) */
+.omg-card.is-interactive {
+  position: relative;
+  transition: box-shadow 0.22s ease, border-color 0.2s, transform 0.22s ease;
+}
+.omg-card.is-interactive:hover {
+  transform: translateY(var(--hover-lift));
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+  box-shadow: var(--shadow-md), 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 .omg-input {
   width: 100%;
   background: var(--bg-surface);
@@ -151,6 +179,7 @@ body {
 }
 
 .omg-btn-primary {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -166,6 +195,25 @@ body {
   box-shadow: var(--shadow-sm);
   transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   white-space: nowrap;
+  overflow: hidden;
+  isolation: isolate;
+}
+.omg-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 80% at 10% 0%, rgba(255, 255, 255, 0.2) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 0;
+}
+.omg-btn-primary > * {
+  position: relative;
+  z-index: 1;
+}
+.omg-btn-primary:hover:not(:disabled)::after {
+  opacity: 1;
 }
 .omg-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -419,6 +467,103 @@ aside[data-collapsed="true"] .sidebar-link:focus-visible {
   color: var(--text-secondary);
   margin-top: 4px;
   max-width: 55ch;
+}
+
+/* Page hero — gradient band behind title */
+.omg-hero {
+  position: relative;
+  margin: -8px -12px 20px;
+  padding: 20px 20px 22px;
+  border-radius: 14px;
+  background: var(--gradient-brand);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.omg-hero::before {
+  content: "";
+  position: absolute;
+  right: -20%;
+  top: -40%;
+  width: 55%;
+  height: 140%;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--brand-green) 12%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Section gradient divider (fade) */
+.gradient-divider {
+  height: 1px;
+  width: 100%;
+  max-width: 200px;
+  background: linear-gradient(90deg, var(--border-strong), transparent);
+  border-radius: 1px;
+}
+
+/* Shimmer / skeleton */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@keyframes softPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ringSweep {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.shimmer-block {
+  background: var(--shimmer-bg);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning) 40%, transparent);
+  animation: softPulse 1.6s ease-in-out infinite;
+}
+.pulse-dot--ok {
+  background: var(--success);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+/* CSS sparkline (7 bars) */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+}
+.sparkline__bar {
+  width: 4px;
+  min-height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+  transition: height 0.3s ease;
+}
+.sparkline--accent .sparkline__bar {
+  background: var(--accent);
+  opacity: 0.6;
+}
+.sparkline--muted .sparkline__bar {
+  background: var(--text-muted);
+  opacity: 0.25;
 }
 
 /* Table */
