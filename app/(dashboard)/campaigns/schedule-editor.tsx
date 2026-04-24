@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addMinutes, addMonths, subMonths } from "date-fns";
+import { addDays, addMinutes, addMonths, subMonths } from "date-fns";
 import { formatInTimeZone, toDate } from "date-fns-tz";
 import { enUS } from "date-fns/locale";
 import type { CampaignCadence } from "@prisma/client";
@@ -38,6 +38,8 @@ export type ScheduleEditorValue = {
   specificDates: string[];
   /** TEST_MINUTES: wall times in campaign TZ, format YYYY-MM-DDTHH:mm */
   testDatetimes: string[];
+  /** Last day the campaign is allowed to run, YYYY-MM-DD in `timezone`, or null = no end */
+  runUntilYmd: string | null;
 };
 
 type Props = {
@@ -48,6 +50,11 @@ type Props = {
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
+}
+
+/** End of wall day in `tz` → UTC ISO (for API + preview). */
+export function endOfDayYmdToIso(ymd: string, tz: string): string {
+  return toDate(`${ymd}T23:59:59.999`, { timeZone: tz }).toISOString();
 }
 
 function daysInMonth(year: number, month1: number) {
@@ -95,7 +102,7 @@ function listMonthCells(
 }
 
 export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: Props) {
-  const { cadence, dayOfWeek, hourOfDay, timezone, daysOfWeekMulti, specificDates } = value;
+  const { cadence, dayOfWeek, hourOfDay, timezone, daysOfWeekMulti, specificDates, runUntilYmd } = value;
   const [view, setView] = useState(() => {
     const t = new Date();
     return { y: t.getFullYear(), m: t.getMonth() + 1 };
@@ -116,6 +123,10 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
       specificDates,
       testDatetimes
     );
+    const endAt =
+      value.runUntilYmd?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(value.runUntilYmd.trim())
+        ? endOfDayYmdToIso(value.runUntilYmd.trim(), timezone)
+        : undefined;
     const res = await fetch("/api/campaigns/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -125,6 +136,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
         hourOfDay,
         timezone,
         startAt: new Date().toISOString(),
+        endAt: endAt ?? null,
         scheduleConfig:
           sc &&
           (cadence === "DAILY" ||
@@ -139,7 +151,16 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
       const d = (await res.json()) as { dates: string[] };
       setPreview(d.dates ?? []);
     }
-  }, [cadence, dayOfWeek, hourOfDay, timezone, daysOfWeekMulti, specificDates, value.testDatetimes]);
+  }, [
+    cadence,
+    dayOfWeek,
+    hourOfDay,
+    timezone,
+    daysOfWeekMulti,
+    specificDates,
+    value.testDatetimes,
+    value.runUntilYmd,
+  ]);
 
   useEffect(() => {
     if (tRef.current) clearTimeout(tRef.current);
@@ -290,6 +311,72 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
             className="omg-input"
             value={timezone}
             onChange={(e) => onChange({ timezone: e.target.value })}
+          />
+        </label>
+      </div>
+
+      <div
+        className="omg-card"
+        style={{ padding: 12, background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
+      >
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Run until</div>
+        <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+          Stops the campaign on this day (in the timezone above). Progress toward “total posts” uses this
+          together with the schedule. Clear for no end date.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          <button
+            type="button"
+            className="omg-btn-ghost"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => onChange({ runUntilYmd: null })}
+          >
+            No end
+          </button>
+          <button
+            type="button"
+            className="omg-btn-ghost"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => {
+              const y0 = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
+              const base = toDate(`${y0}T12:00:00`, { timeZone: timezone });
+              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 6), timezone, "yyyy-MM-dd") });
+            }}
+          >
+            +1 week
+          </button>
+          <button
+            type="button"
+            className="omg-btn-ghost"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => {
+              const y0 = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
+              const base = toDate(`${y0}T12:00:00`, { timeZone: timezone });
+              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 13), timezone, "yyyy-MM-dd") });
+            }}
+          >
+            +2 weeks
+          </button>
+          <button
+            type="button"
+            className="omg-btn-ghost"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => {
+              const y0 = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
+              const base = toDate(`${y0}T12:00:00`, { timeZone: timezone });
+              onChange({ runUntilYmd: formatInTimeZone(addMonths(base, 1), timezone, "yyyy-MM-dd") });
+            }}
+          >
+            +1 month
+          </button>
+        </div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 220 }}>
+          End date
+          <input
+            className="omg-input"
+            type="date"
+            value={runUntilYmd ?? ""}
+            onChange={(e) => onChange({ runUntilYmd: e.target.value ? e.target.value : null })}
           />
         </label>
       </div>
@@ -499,5 +586,6 @@ export function defaultScheduleValue(): ScheduleEditorValue {
     daysOfWeekMulti: [1, 3, 5],
     specificDates: [],
     testDatetimes: [],
+    runUntilYmd: null,
   };
 }

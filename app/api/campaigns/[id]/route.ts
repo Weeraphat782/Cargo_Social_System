@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   CampaignContentMode,
   CampaignStatus,
+  PostStatus,
   Prisma,
   type Platform,
 } from "@prisma/client";
@@ -9,6 +10,7 @@ import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
+import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
 import { parseScheduleConfig, toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
 import type { CampaignCadence, CampaignTheme } from "@prisma/client";
 
@@ -47,43 +49,65 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const c = await prisma.campaign.findUnique({
-    where: { id },
-    include: {
-      runs: { orderBy: { startedAt: "desc" }, take: 30 },
-      posts: {
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        select: {
-          id: true,
-          status: true,
-          createdAt: true,
-          scheduledAt: true,
-          topic: { select: { name: true } },
-          sourceNews: { select: { title: true, url: true } },
-          variants: {
-            orderBy: { platform: "asc" },
-            select: {
-              id: true,
-              platform: true,
-              caption: true,
-              hashtags: true,
-              title: true,
-              slug: true,
-              publishedAt: true,
-              remoteId: true,
-              media: {
-                select: { id: true, imageUrl: true },
-                orderBy: { createdAt: "asc" },
+  const [c, publishedCount] = await Promise.all([
+    prisma.campaign.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { posts: true } },
+        runs: { orderBy: { startedAt: "desc" }, take: 30 },
+        posts: {
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            scheduledAt: true,
+            topic: { select: { name: true } },
+            sourceNews: { select: { title: true, url: true } },
+            variants: {
+              orderBy: { platform: "asc" },
+              select: {
+                id: true,
+                platform: true,
+                caption: true,
+                hashtags: true,
+                title: true,
+                slug: true,
+                publishedAt: true,
+                remoteId: true,
+                media: {
+                  select: { id: true, imageUrl: true },
+                  orderBy: { createdAt: "asc" },
+                },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.post.count({
+      where: { campaignId: id, status: PostStatus.PUBLISHED },
+    }),
+  ]);
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(c);
+
+  const schedIn = {
+    cadence: c.cadence,
+    dayOfWeek: c.dayOfWeek,
+    hourOfDay: c.hourOfDay,
+    timezone: c.timezone,
+    lastRunAt: c.lastRunAt,
+    startAt: c.startAt,
+    customCron: c.customCron,
+    scheduleConfig: c.scheduleConfig,
+  };
+  const upcomingRuns = (c.endAt
+    ? previewNextRunsUntil(schedIn, c.endAt, 16)
+    : previewNextRuns(schedIn, 8)
+  ).map((d) => d.toISOString());
+
+  return NextResponse.json({ ...c, publishedCount, upcomingRuns });
 }
 
 export async function PATCH(

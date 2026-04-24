@@ -276,7 +276,7 @@ export default function QueueClient({
       ) : (
         <>
           <CollapsibleSection title="Pending" count={pendingOnly.length} defaultOpen>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {pendingOnly.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>No posts awaiting review.</p>
               ) : (
@@ -315,7 +315,7 @@ export default function QueueClient({
                   />
                 ))
               )}
-            </div>
+                            </div>
           </CollapsibleSection>
 
           <CollapsibleSection title="Scheduled" count={scheduledSorted.length} defaultOpen margin="24px 0 20px">
@@ -358,10 +358,10 @@ export default function QueueClient({
                   />
                 ))
               )}
-            </div>
+                            </div>
           </CollapsibleSection>
-        </>
-      )}
+                                  </>
+                                )}
 
       <CollapsibleSection
         title="Published · Last 7 days"
@@ -369,20 +369,20 @@ export default function QueueClient({
         defaultOpen={false}
         margin="28px 0 20px"
       >
-        {publishedPosts.length === 0 ? (
+      {publishedPosts.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 0 }}>
-            No published posts in this feed yet.
-          </p>
+          No published posts in this feed yet.
+        </p>
         ) : publishedLast7.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 0 }}>
             No posts published in the last 7 days.
           </p>
-        ) : (
-          <>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
+      ) : (
+        <>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
               Showing {publishedLast7.length} published in the last 7 days (max {PUBLISHED_FEED_MAX})
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 8 }}>
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 8 }}>
               {publishedLast7.map((post) => (
                 <QueuePublishedPostCard
                   key={post.id}
@@ -393,9 +393,9 @@ export default function QueueClient({
                   setActivePlatformTab={setActivePlatformTab}
                 />
               ))}
-            </div>
-          </>
-        )}
+        </div>
+        </>
+      )}
       </CollapsibleSection>
 
       {/* Schedule modal */}

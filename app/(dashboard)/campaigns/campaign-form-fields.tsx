@@ -1,6 +1,7 @@
 "use client";
 
 import type { Campaign, CampaignContentMode, CampaignTheme, Platform } from "@prisma/client";
+import { formatInTimeZone } from "date-fns-tz";
 import { parseScheduleConfig } from "@/lib/campaigns/schedule-config";
 import { CampaignScheduleEditor, defaultScheduleValue, type ScheduleEditorValue } from "./schedule-editor";
 
@@ -81,7 +82,7 @@ export function campaignToFormFieldsValue(
     | "postsPerRun"
     | "totalPostsCap"
     | "autoApprove"
-  >
+  > & { endAt?: string | Date | null }
 ): CampaignFormFieldsValue {
   const base = defaultScheduleValue();
   const parsed = parseScheduleConfig(c.cadence, c.scheduleConfig);
@@ -90,6 +91,16 @@ export function campaignToFormFieldsValue(
     : c.cadence === "WEEKLY_MULTI"
       ? [c.dayOfWeek ?? 1]
       : base.daysOfWeekMulti;
+  const tz = c.timezone || base.timezone;
+  const endRaw = c.endAt;
+  const runUntilYmd =
+    endRaw == null
+      ? null
+      : formatInTimeZone(
+          endRaw instanceof Date ? endRaw : new Date(String(endRaw)),
+          tz,
+          "yyyy-MM-dd"
+        );
 
   return {
     name: c.name,
@@ -102,10 +113,11 @@ export function campaignToFormFieldsValue(
       cadence: c.cadence,
       dayOfWeek: c.dayOfWeek ?? base.dayOfWeek,
       hourOfDay: c.hourOfDay ?? base.hourOfDay,
-      timezone: c.timezone || base.timezone,
+      timezone: tz,
       daysOfWeekMulti: peDays,
       specificDates: parsed.dates?.length ? parsed.dates : [],
       testDatetimes: parsed.datetimes?.length ? parsed.datetimes : [],
+      runUntilYmd,
     },
     platforms: c.platforms?.length ? [...c.platforms] : [...FORM_PLATFORM_FALLBACK],
     postsPerRun: c.postsPerRun,
@@ -132,7 +144,7 @@ export function CampaignFormFields({
   onAdvancedOpenChange,
   alwaysShowAdvanced = false,
 }: Props) {
-  const { name, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, totalPostsCap, autoApprove } = value;
+  const { name, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove } = value;
 
   const advancedBlock = (
     <div style={{ display: "grid", gap: 12 }}>
@@ -188,30 +200,17 @@ export function CampaignFormFields({
       </div>
       {layout === "manual" ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-              Posts per run
-              <input
-                className="omg-input"
-                type="number"
-                min={1}
-                max={5}
-                value={postsPerRun}
-                onChange={(e) => onChange({ postsPerRun: parseInt(e.target.value, 10) || 1 })}
-              />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-              Total cap (optional)
-              <input
-                className="omg-input"
-                type="number"
-                min={0}
-                placeholder="∞"
-                value={totalPostsCap}
-                onChange={(e) => onChange({ totalPostsCap: e.target.value })}
-              />
-            </label>
-          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 220 }}>
+            Posts per run
+            <input
+              className="omg-input"
+              type="number"
+              min={1}
+              max={5}
+              value={postsPerRun}
+              onChange={(e) => onChange({ postsPerRun: parseInt(e.target.value, 10) || 1 })}
+            />
+          </label>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
             <input
               type="checkbox"
@@ -221,19 +220,7 @@ export function CampaignFormFields({
             Auto-approve
           </label>
         </>
-      ) : (
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 260 }}>
-          Total cap (optional)
-          <input
-            className="omg-input"
-            type="number"
-            min={0}
-            placeholder="∞"
-            value={totalPostsCap}
-            onChange={(e) => onChange({ totalPostsCap: e.target.value })}
-          />
-        </label>
-      )}
+      ) : null}
     </div>
   );
 

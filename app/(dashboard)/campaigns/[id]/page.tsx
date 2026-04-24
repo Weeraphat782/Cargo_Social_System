@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FileStack } from "lucide-react";
 import type { Campaign, CampaignRun, CampaignStatus } from "@prisma/client";
+import { formatInTimeZone } from "date-fns-tz";
+import { getCampaignProgressBar } from "@/lib/campaigns-progress";
 import { CountdownRing, PageHeader, ProgressBar, Skeleton } from "@/components/ui";
 
 type CampaignPost = {
@@ -28,6 +30,9 @@ type CampaignPost = {
 };
 
 type CampaignDetail = Campaign & {
+  _count: { posts: number };
+  publishedCount: number;
+  upcomingRuns: string[];
   runs: CampaignRun[];
   posts: CampaignPost[];
 };
@@ -197,9 +202,20 @@ export default function CampaignDetailPage() {
       </button>
     );
 
-  const publishedN = c.posts.filter((p) => p.status === "PUBLISHED").length;
-  const cap = c.totalPostsCap;
-  const barMax = cap != null ? cap : Math.max(8, publishedN + 3);
+  const progress = getCampaignProgressBar({
+    totalPostsCap: c.totalPostsCap,
+    endAt: c.endAt ? new Date(c.endAt as Date | string).toISOString() : null,
+    cadence: c.cadence,
+    dayOfWeek: c.dayOfWeek,
+    hourOfDay: c.hourOfDay,
+    timezone: c.timezone,
+    startAt: new Date(c.startAt as Date | string).toISOString(),
+    postsPerRun: c.postsPerRun,
+    customCron: c.customCron,
+    scheduleConfig: c.scheduleConfig,
+    postCount: c._count.posts,
+    publishedCount: c.publishedCount,
+  });
 
   return (
     <div>
@@ -225,11 +241,19 @@ export default function CampaignDetailPage() {
         }}
       >
         <div style={{ flex: 1, minWidth: 220 }}>
-          <ProgressBar
-            value={publishedN}
-            max={barMax}
-            label={cap != null ? "Published / cap" : "Published posts (relative scale)"}
-          />
+          {progress.showBar ? (
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: 10, color: "var(--text-muted)" }}>{progress.subtitle}</p>
+              <ProgressBar
+                value={progress.value}
+                max={Math.max(1, progress.max)}
+                label="Published posts"
+                ratioLabelOverride={progress.ratioLabel}
+              />
+            </div>
+          ) : (
+            <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)" }}>{progress.subtitle}</p>
+          )}
         </div>
         {c.nextRunAt != null ? (
           <CountdownRing targetIso={new Date(c.nextRunAt as Date | string).toISOString()} label="Next run" size={56} />
@@ -284,28 +308,46 @@ export default function CampaignDetailPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 28, maxWidth: 1100 }}>
         <div>
           <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Schedule</h2>
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            Next run: {c.nextRunAt ? new Date(c.nextRunAt).toLocaleString() : "—"}
-            <br />
-            Last run: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : "—"}
-            <br />
+          <div style={{ fontSize: 12, color: "var(--text-muted)", display: "grid", gap: 4 }}>
+            <span>Next run: {c.nextRunAt ? new Date(c.nextRunAt).toLocaleString() : "—"}</span>
+            <span>Last run: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : "—"}</span>
             {c.cadence === "TEST_MINUTES" && Array.isArray((c.scheduleConfig as { datetimes?: string[] } | null)?.datetimes) ? (
-              <>
+              <span>
                 Test slots (TZ {c.timezone}):{" "}
                 {((c.scheduleConfig as { datetimes: string[] }).datetimes || []).join(", ")}
-                <br />
-              </>
+              </span>
             ) : null}
-            Day: {c.dayOfWeek} · Hour: {c.hourOfDay} · posts/run: {c.postsPerRun}
-            {c.totalPostsCap != null && (
-              <>
-                <br />
-                Cap: {c.totalPostsCap}
-              </>
+            {c.upcomingRuns.length > 0 ? (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                  Upcoming runs
+                </div>
+                <ul
+                  style={{
+                    margin: "0 0 8px",
+                    paddingLeft: 18,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    display: "grid",
+                    gap: 2,
+                  }}
+                >
+                  {c.upcomingRuns.slice(0, 8).map((iso) => (
+                    <li key={iso} suppressHydrationWarning>
+                      {formatInTimeZone(new Date(iso), c.timezone, "EEE, dd MMM yyyy, HH:mm")}
+                    </li>
+                  ))}
+                  {c.upcomingRuns.length > 8 ? (
+                    <li style={{ listStyle: "none", color: "var(--text-secondary)" }}>+{c.upcomingRuns.length - 8} more</li>
+                  ) : null}
+                </ul>
+                <span>posts/run: {c.postsPerRun} · TZ {c.timezone}</span>
+              </div>
+            ) : (
+              <span>Day: {c.dayOfWeek} · Hour: {c.hourOfDay} · posts/run: {c.postsPerRun}</span>
             )}
-            <br />
-            Auto-approve: {c.autoApprove ? "yes" : "no"}
-          </p>
+            <span>Auto-approve: {c.autoApprove ? "yes" : "no"}</span>
+          </div>
         </div>
         <div>
           <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Keywords</h2>

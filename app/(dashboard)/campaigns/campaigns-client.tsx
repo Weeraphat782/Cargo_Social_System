@@ -8,15 +8,17 @@ import type {
   CampaignContentMode,
   CampaignStatus,
   CampaignTheme,
+  Prisma,
 } from "@prisma/client";
 import { Megaphone } from "lucide-react";
 import { PageHeader, ProgressBar, Skeleton, StatCard } from "@/components/ui";
+import { getCampaignProgressBar } from "@/lib/campaigns-progress";
 import {
   defaultCampaignFormFieldsValue,
   CampaignFormFields,
   type CampaignFormFieldsValue,
 } from "./campaign-form-fields";
-import { defaultScheduleValue, type ScheduleEditorValue } from "./schedule-editor";
+import { defaultScheduleValue, endOfDayYmdToIso, type ScheduleEditorValue } from "./schedule-editor";
 
 type SuggestedCampaign = {
   name: string;
@@ -45,7 +47,16 @@ type CampaignRow = {
   nextRunAt: string | null;
   autoApprove: boolean;
   timezone: string;
+  startAt: string;
+  endAt: string | null;
+  dayOfWeek: number | null;
+  hourOfDay: number | null;
+  postsPerRun: number;
+  totalPostsCap: number | null;
+  customCron: string | null;
+  scheduleConfig: Prisma.JsonValue;
   _count: { posts: number; runs: number };
+  publishedCount: number;
 };
 
 /** Short countdown line for campaign row (list view). */
@@ -190,6 +201,9 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : undefined,
           autoApprove,
+          endAt: schedule.runUntilYmd?.trim()
+            ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
+            : null,
           status,
         }),
       });
@@ -265,6 +279,9 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           postsPerRun: draft.postsPerRun,
           totalPostsCap: draft.totalPostsCap ? parseInt(draft.totalPostsCap, 10) : undefined,
           autoApprove: draft.autoApprove,
+          endAt: sch.runUntilYmd?.trim()
+            ? endOfDayYmdToIso(sch.runUntilYmd.trim(), sch.timezone)
+            : null,
           status: (startActive ? "ACTIVE" : "DRAFT") as CampaignStatus,
         }),
       });
@@ -706,12 +723,26 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {campaigns.map((c) => {
-            const postMax = Math.max(8, c._count.posts + 3);
+            const progress = getCampaignProgressBar({
+              totalPostsCap: c.totalPostsCap,
+              endAt: c.endAt,
+              cadence: c.cadence,
+              dayOfWeek: c.dayOfWeek,
+              hourOfDay: c.hourOfDay,
+              timezone: c.timezone,
+              startAt: c.startAt,
+              postsPerRun: c.postsPerRun,
+              customCron: c.customCron,
+              scheduleConfig: c.scheduleConfig,
+              postCount: c._count.posts,
+              publishedCount: c.publishedCount,
+            });
             return (
             <div
               key={c.id}
               className="omg-card is-interactive"
               style={{
+                position: "relative",
                 padding: "12px 16px",
                 display: "flex",
                 flexWrap: "wrap",
@@ -721,11 +752,8 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
               }}
             >
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 16, flex: 1, minWidth: 0 }}>
-                <Link
-                  href={`/campaigns/${c.id}`}
+                <div
                   style={{
-                    textDecoration: "none",
-                    color: "inherit",
                     flex: 1,
                     minWidth: 200,
                   }}
@@ -750,8 +778,11 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                   </div>
                   <div style={{ fontSize: 11, marginTop: 4, color: "var(--text-muted)" }}>
                     Next: {c.nextRunAt ? new Date(c.nextRunAt).toLocaleString() : "—"} · {c._count.posts} posts
+                    {c.endAt
+                      ? ` · until ${new Date(c.endAt).toLocaleDateString()}`
+                      : null}
                   </div>
-                </Link>
+                </div>
                 <div
                   style={{
                     width: 160,
@@ -762,7 +793,20 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                     alignItems: "stretch",
                   }}
                 >
-                  <ProgressBar value={c._count.posts} max={postMax} label="Posts" compact />
+                  {progress.showBar ? (
+                    <div>
+                      <p style={{ margin: "0 0 4px", fontSize: 10, color: "var(--text-muted)" }}>{progress.subtitle}</p>
+                      <ProgressBar
+                        value={progress.value}
+                        max={Math.max(1, progress.max)}
+                        label="Posts"
+                        compact
+                        ratioLabelOverride={progress.ratioLabel}
+                      />
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)" }}>{progress.subtitle}</p>
+                  )}
                   {c.nextRunAt && c.status === "ACTIVE" ? (
                     <span
                       className="omg-badge omg-badge-scheduled"
@@ -784,7 +828,10 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                   ) : null}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }} onClick={(e) => e.preventDefault()}>
+              <div
+                style={{ display: "flex", gap: 6, flexShrink: 0, position: "relative", zIndex: 2 }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 {c.status === "DRAFT" && (
                   <button
                     type="button"
@@ -821,6 +868,16 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                   Details
                 </Link>
               </div>
+              <Link
+                href={`/campaigns/${c.id}`}
+                aria-label={`Open ${c.name}`}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 1,
+                  borderRadius: "inherit",
+                }}
+              />
             </div>
             );
           })}

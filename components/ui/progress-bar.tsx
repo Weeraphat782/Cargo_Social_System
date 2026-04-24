@@ -8,12 +8,15 @@ export function ProgressBar({
   label,
   showLabel = true,
   compact,
+  ratioLabelOverride,
 }: {
   value: number;
   max: number;
   label?: string;
   showLabel?: boolean;
   compact?: boolean;
+  /** When set, shown instead of `{value} / {max}` (e.g. `1 / ~7`) */
+  ratioLabelOverride?: string;
 }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : value > 0 ? 100 : 0;
 
@@ -32,9 +35,7 @@ export function ProgressBar({
         >
           {label && <span>{label}</span>}
           {showLabel && (
-            <span>
-              {value} / {max}
-            </span>
+            <span>{ratioLabelOverride ?? `${value} / ${max}`}</span>
           )}
         </div>
       )}

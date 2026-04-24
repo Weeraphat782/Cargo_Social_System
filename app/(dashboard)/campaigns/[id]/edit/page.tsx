@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { CampaignStatus, Prisma } from "@prisma/client";
 import { Pencil } from "lucide-react";
 import { PageHeader, Skeleton } from "@/components/ui";
+import { endOfDayYmdToIso } from "../../schedule-editor";
 import {
   campaignToFormFieldsValue,
   defaultCampaignFormFieldsValue,
@@ -31,6 +32,7 @@ type CampaignLoad = {
   postsPerRun: number;
   totalPostsCap: number | null;
   autoApprove: boolean;
+  endAt: string | null;
 };
 
 export default function EditCampaignPage() {
@@ -110,6 +112,9 @@ export default function EditCampaignPage() {
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : null,
           autoApprove,
+          endAt: schedule.runUntilYmd?.trim()
+            ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
+            : null,
         }),
       });
       const data = (await res.json()) as { error?: string };

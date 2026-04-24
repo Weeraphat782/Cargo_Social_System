@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard } from "lucide-react";
 import { CountdownRing, PageHeader, ProgressBar, StatCard } from "@/components/ui";
+import type { CampaignCadence, Prisma } from "@prisma/client";
+import { getCampaignProgressBar } from "@/lib/campaigns-progress";
 
 export type DashboardStats = {
   pending: number;
@@ -19,12 +21,19 @@ type Topic = { id: string; name: string; keywords: string; active: boolean };
 export type DashboardCampaignRow = {
   id: string;
   name: string;
-  cadence: string;
+  cadence: CampaignCadence;
   theme: string;
   nextRunAt: string | null;
   platforms: string[];
   postsPerRun: number;
   totalPostsCap: number | null;
+  startAt: string;
+  endAt: string | null;
+  dayOfWeek: number | null;
+  hourOfDay: number | null;
+  timezone: string;
+  customCron: string | null;
+  scheduleConfig: Prisma.JsonValue;
   publishedCount: number;
   _count: { runs: number; posts: number };
 };
@@ -212,19 +221,29 @@ export default function DashboardClient({
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
               {campaigns.map((c) => {
-                const cap = c.totalPostsCap;
-                const maxCap = cap ?? Math.max(1, c.publishedCount, c._count.posts, 1);
-                const progressLabel =
-                  cap != null
-                    ? `${c.publishedCount} published / cap ${cap}`
-                    : `${c.publishedCount} published · ${c._count.posts} post${c._count.posts === 1 ? "" : "s"}`;
+                const progress = getCampaignProgressBar({
+                  totalPostsCap: c.totalPostsCap,
+                  endAt: c.endAt,
+                  cadence: c.cadence,
+                  dayOfWeek: c.dayOfWeek,
+                  hourOfDay: c.hourOfDay,
+                  timezone: c.timezone,
+                  startAt: c.startAt,
+                  postsPerRun: c.postsPerRun,
+                  customCron: c.customCron,
+                  scheduleConfig: c.scheduleConfig,
+                  postCount: c._count.posts,
+                  publishedCount: c.publishedCount,
+                });
                 return (
-                  <li key={c.id} className="omg-card is-interactive" style={{ padding: "14px 16px", background: "var(--bg-surface)" }}>
+                  <li
+                    key={c.id}
+                    className="omg-card is-interactive"
+                    style={{ position: "relative", padding: "14px 16px", background: "var(--bg-surface)" }}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <Link href={`/campaigns/${c.id}`} style={{ fontWeight: 600, color: "var(--text-primary)", textDecoration: "none", fontSize: 15 }}>
-                          {c.name}
-                        </Link>
+                        <span style={{ display: "block", fontWeight: 600, color: "var(--text-primary)", fontSize: 15 }}>{c.name}</span>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, alignItems: "center" }}>
                           <span className="omg-badge" style={{ background: "var(--navy-dim)", color: "var(--info)" }}>
                             {c.cadence.replace(/_/g, " ")}
@@ -241,11 +260,33 @@ export default function DashboardClient({
                             );
                           })}
                         </div>
-                        <p style={{ margin: "8px 0 4px", fontSize: 12, color: "var(--text-secondary)" }}>{progressLabel}</p>
-                        <ProgressBar value={c.publishedCount} max={maxCap} label="Progress" compact />
+                        {progress.showBar ? (
+                          <>
+                            <p style={{ margin: "8px 0 4px", fontSize: 12, color: "var(--text-secondary)" }}>{progress.subtitle}</p>
+                            <ProgressBar
+                              value={progress.value}
+                              max={Math.max(1, progress.max)}
+                              label="Progress"
+                              compact
+                              ratioLabelOverride={progress.ratioLabel}
+                            />
+                          </>
+                        ) : (
+                          <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>{progress.subtitle}</p>
+                        )}
                       </div>
                       {c.nextRunAt ? <CountdownRing targetIso={c.nextRunAt} label="Next run" size={50} /> : null}
                     </div>
+                    <Link
+                      href={`/campaigns/${c.id}`}
+                      aria-label={`Open ${c.name}`}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 1,
+                        borderRadius: "inherit",
+                      }}
+                    />
                   </li>
                 );
               })}
