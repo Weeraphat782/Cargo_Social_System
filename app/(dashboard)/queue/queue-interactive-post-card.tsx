@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
 import type { RefCategory } from "./queue-shared";
 import { platformMeta, sortByPlatform, statusBadge, type SetPending } from "./queue-shared";
+import { PlatformIcon, PlatformPill } from "@/components/ui";
 
 export type QueueInteractivePostCardProps = {
   post: Post;
@@ -152,7 +153,7 @@ export function QueueInteractivePostCard({
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
                     {sortByPlatform(post.variants).map((v) => (
                       <span key={v.id} className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                        {platformMeta[v.platform]?.label ?? v.platform}
+                        <PlatformPill platform={v.platform} size={11} />
                       </span>
                     ))}
                   </div>
@@ -233,7 +234,7 @@ export function QueueInteractivePostCard({
                             fontWeight: active ? 600 : 500,
                           }}
                         >
-                          {platformMeta[v.platform]?.label ?? v.platform}
+                          <PlatformPill platform={v.platform} size={12} active={active} />
                         </button>
                       );
                     })}
@@ -255,7 +256,7 @@ export function QueueInteractivePostCard({
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                           <span className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                            {platformMeta[v.platform]?.label ?? v.platform}
+                            <PlatformPill platform={v.platform} size={11} />
                           </span>
                         </div>
 

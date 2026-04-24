@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ScrollText } from "lucide-react";
-import { PageHeader, StatCard } from "@/components/ui";
+import { PageHeader, PlatformPill, StatCard } from "@/components/ui";
 
 export type LogRow = {
   id: string;
@@ -16,12 +16,6 @@ export type LogRow = {
   post: { id: string; status: string; topic: { name: string } | null };
 };
 
-const platformMeta: Record<string, { label: string; cls: string }> = {
-  FACEBOOK:  { label: "Facebook",  cls: "platform-fb" },
-  INSTAGRAM: { label: "Instagram", cls: "platform-ig" },
-  LINKEDIN:  { label: "LinkedIn",  cls: "platform-li" },
-  OMG:       { label: "OMG Cargo", cls: "platform-omg" },
-};
 
 export default function LogsClient({ initialLogs }: { initialLogs: LogRow[] }) {
   const [logs, setLogs] = useState<LogRow[]>(initialLogs);
@@ -125,9 +119,7 @@ export default function LogsClient({ initialLogs }: { initialLogs: LogRow[] }) {
                       {l.post.topic?.name ?? <span style={{ color: "var(--text-muted)" }}>—</span>}
                     </td>
                     <td>
-                      <span className={`platform-pill ${platformMeta[l.platform]?.cls ?? ""}`}>
-                        {platformMeta[l.platform]?.label ?? l.platform}
-                      </span>
+                      <PlatformPill platform={l.platform} size={12} />
                     </td>
                     <td>
                       {l.success ? (

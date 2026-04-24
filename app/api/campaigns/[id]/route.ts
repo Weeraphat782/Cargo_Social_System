@@ -11,10 +11,11 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
-import { parseScheduleConfig, toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
+import { parseScheduleConfig, toStoredScheduleConfig, clampPostsPerRun } from "@/lib/campaigns/schedule-config";
 import type { CampaignCadence, CampaignTheme } from "@prisma/client";
 
 const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
+const TEST_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 type PatchBody = {
   name?: string;
@@ -172,7 +173,7 @@ export async function PATCH(
         (effectiveCadence === "WEEKLY_MULTI" ? [existing.dayOfWeek ?? 1] : []);
       const dates = body.specificDates ?? pe.dates ?? [];
       const testD = (body.testDatetimes ?? pe.datetimes ?? []).filter((d) =>
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
+        TEST_DATETIME_RE.test(d)
       );
       if (effectiveCadence === "TEST_MINUTES" && testD.length === 0) {
         return NextResponse.json({ error: "Add at least one test datetime" }, { status: 400 });
@@ -192,7 +193,7 @@ export async function PATCH(
     u.scheduleConfig = body.scheduleConfig === null ? Prisma.JsonNull : body.scheduleConfig;
   }
   if (body.postsPerRun != null) {
-    u.postsPerRun = Math.min(5, Math.max(1, body.postsPerRun));
+    u.postsPerRun = clampPostsPerRun(body.postsPerRun);
   }
   if (body.totalPostsCap !== undefined) u.totalPostsCap = body.totalPostsCap;
   if (body.autoApprove != null) u.autoApprove = body.autoApprove;
@@ -206,7 +207,7 @@ export async function PATCH(
   const mergedCadence = body.cadence ?? existing.cadence;
   const mergedParsed = parseScheduleConfig(mergedCadence, existing.scheduleConfig);
   const mergedTestD = (body.testDatetimes ?? mergedParsed.datetimes ?? []).filter((d) =>
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
+    TEST_DATETIME_RE.test(d)
   );
   const mergedScheduleForCompute: Prisma.JsonValue | null =
     mergedCadence === "DAILY" ||

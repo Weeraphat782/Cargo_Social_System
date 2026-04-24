@@ -184,53 +184,42 @@ export function computeNextRun(c: ComputeNextRunInput, from: Date = new Date()):
   return nextWeeklySlot(anchor, tz, dow0, hour);
 }
 
-/** Preview the next N run times; stops early if `null` (exhausted). */
-export function previewNextRuns(c: ComputeNextRunInput, count: number): Date[] {
+/** Shared inner iterator: yields successive run instants starting from `from`, up to `maxCount`. */
+function* iterateRuns(
+  c: ComputeNextRunInput,
+  from: Date,
+  maxCount: number
+): Generator<Date> {
   const out: Date[] = [];
-  let from = c.startAt.getTime() > new Date().getTime() ? c.startAt : new Date();
-  for (let i = 0; i < count; i++) {
-    const cI =
-      (c.cadence === "BIWEEKLY" && i > 0) ||
-      (c.cadence === "MONTHLY" && i > 0) ||
-      (c.cadence === "SPECIFIC_DATES" && i > 0) ||
-      (c.cadence === "DAILY" && i > 0) ||
-      (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
-      ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
-        ? { ...c, lastRunAt: out[i - 1]! }
-        : c;
+  for (let i = 0; i < maxCount; i++) {
+    const cI = i > 0 ? { ...c, lastRunAt: out[i - 1]! } : c;
     const n = computeNextRun(cI, from);
-    if (n == null) break;
+    if (n == null) return;
     out.push(n);
     from = addMinutes(n, 1);
+    yield n;
   }
+}
+
+/** Preview the next N run times; stops early if schedule is exhausted. */
+export function previewNextRuns(c: ComputeNextRunInput, count: number): Date[] {
+  const from = c.startAt.getTime() > Date.now() ? c.startAt : new Date();
+  const out: Date[] = [];
+  for (const n of iterateRuns(c, from, count)) out.push(n);
   return out;
 }
 
-/** Same as {@link previewNextRuns} but stops when the next run is after `endAt`. */
+/** Same as {@link previewNextRuns} but stops when the next run would exceed `endAt`. */
 export function previewNextRunsUntil(
   c: ComputeNextRunInput,
   endAt: Date,
   maxCount: number
 ): Date[] {
+  const from = c.startAt.getTime() > Date.now() ? c.startAt : new Date();
   const out: Date[] = [];
-  let from = c.startAt.getTime() > new Date().getTime() ? c.startAt : new Date();
-  for (let i = 0; i < maxCount; i++) {
-    const cI =
-      (c.cadence === "BIWEEKLY" && i > 0) ||
-      (c.cadence === "MONTHLY" && i > 0) ||
-      (c.cadence === "SPECIFIC_DATES" && i > 0) ||
-      (c.cadence === "DAILY" && i > 0) ||
-      (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
-      ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
-        ? { ...c, lastRunAt: out[i - 1]! }
-        : c;
-    const n = computeNextRun(cI, from);
-    if (n == null) break;
+  for (const n of iterateRuns(c, from, maxCount)) {
     if (n.getTime() > endAt.getTime()) break;
     out.push(n);
-    from = addMinutes(n, 1);
   }
   return out;
 }
@@ -243,23 +232,9 @@ export function previewNextRunsInRange(
   maxCount: number
 ): Date[] {
   const out: Date[] = [];
-  let from = rangeStart;
-  for (let i = 0; i < maxCount; i++) {
-    const cI =
-      (c.cadence === "BIWEEKLY" && i > 0) ||
-      (c.cadence === "MONTHLY" && i > 0) ||
-      (c.cadence === "SPECIFIC_DATES" && i > 0) ||
-      (c.cadence === "DAILY" && i > 0) ||
-      (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
-      ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
-        ? { ...c, lastRunAt: out[i - 1]! }
-        : c;
-    const n = computeNextRun(cI, from);
-    if (n == null) break;
+  for (const n of iterateRuns(c, rangeStart, maxCount)) {
     if (n.getTime() > endAt.getTime()) break;
     if (n.getTime() >= rangeStart.getTime()) out.push(n);
-    from = addMinutes(n, 1);
   }
   return out;
 }

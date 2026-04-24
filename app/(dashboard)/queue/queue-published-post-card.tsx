@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
 import { platformMeta, sortByPlatform, statusBadge } from "./queue-shared";
+import { PlatformPill } from "@/components/ui";
 
 export type QueuePublishedPostCardProps = {
   post: Post;
@@ -103,7 +104,7 @@ export function QueuePublishedPostCard({
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
                       {sortByPlatform(post.variants).map((v) => (
                         <span key={v.id} className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                          {platformMeta[v.platform]?.label ?? v.platform}
+                          <PlatformPill platform={v.platform} size={11} />
                         </span>
                       ))}
                     </div>
@@ -168,7 +169,7 @@ export function QueuePublishedPostCard({
                               fontWeight: active ? 600 : 500,
                             }}
                           >
-                            {platformMeta[v.platform]?.label ?? v.platform}
+                            <PlatformPill platform={v.platform} size={12} active={active} />
                           </button>
                         );
                       })}
@@ -193,7 +194,7 @@ export function QueuePublishedPostCard({
                           >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                               <span className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                                {platformMeta[v.platform]?.label ?? v.platform}
+                                <PlatformPill platform={v.platform} size={11} />
                               </span>
                             </div>
                             {v.media[0]?.imageUrl && (

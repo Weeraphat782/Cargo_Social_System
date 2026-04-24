@@ -28,6 +28,8 @@ export default function QueueClient({
   const [scheduleDate, setScheduleDate] = useState<string>("");
   const [scheduleTime, setScheduleTime] = useState<string>("");
 
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const [refCategories, setRefCategories] = useState<RefCategory[]>([]);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
   const [refCategoryByVariant, setRefCategoryByVariant] = useState<Record<string, string>>({});
@@ -68,12 +70,15 @@ export default function QueueClient({
   }, []);
 
   async function approve(id: string, scheduledAt?: string) {
+    setActionError(null);
     const res = await fetch(`/api/posts/${id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(scheduledAt ? { scheduledAt } : {}),
     });
     if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      setActionError(data.error ?? "Failed to approve post");
       void load({ silent: true });
       return;
     }
@@ -98,8 +103,11 @@ export default function QueueClient({
 
   async function reject(id: string) {
     if (!confirm("Reject this post?")) return;
+    setActionError(null);
     const res = await fetch(`/api/posts/${id}/reject`, { method: "POST" });
     if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string };
+      setActionError(data.error ?? "Failed to reject post");
       void load({ silent: true });
       return;
     }
@@ -249,6 +257,11 @@ export default function QueueClient({
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      {actionError && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: "var(--danger-dim)", color: "var(--danger)", fontSize: 13 }}>
+          {actionError}
+        </div>
+      )}
       <PageHeader
         title="Approval Queue"
         subtitle="Review AI-generated drafts, edit copy, approve or schedule, then publish to all platforms."

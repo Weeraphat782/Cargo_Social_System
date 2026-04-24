@@ -7,7 +7,8 @@ import { FileStack } from "lucide-react";
 import type { Campaign, CampaignRun, CampaignStatus } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
-import { CountdownRing, PageHeader, ProgressBar, Skeleton } from "@/components/ui";
+import { platformMeta, PLATFORM_ORDER } from "@/lib/platforms";
+import { CountdownRing, PageHeader, PlatformPill, ProgressBar, Skeleton } from "@/components/ui";
 
 type CampaignPost = {
   id: string;
@@ -37,13 +38,6 @@ type CampaignDetail = Campaign & {
   posts: CampaignPost[];
 };
 
-const platformMeta: Record<string, { label: string; cls: string }> = {
-  FACEBOOK: { label: "Facebook", cls: "platform-fb" },
-  INSTAGRAM: { label: "Instagram", cls: "platform-ig" },
-  LINKEDIN: { label: "LinkedIn", cls: "platform-li" },
-  OMG: { label: "OMG Cargo", cls: "platform-omg" },
-};
-
 const statusBadge: Record<string, string> = {
   PENDING_APPROVAL: "omg-badge-pending",
   APPROVED: "omg-badge-approved",
@@ -53,8 +47,6 @@ const statusBadge: Record<string, string> = {
   SCHEDULED: "omg-badge-scheduled",
   DRAFTING: "omg-badge-pending",
 };
-
-const PLATFORM_ORDER = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as const;
 
 function sortByPlatform<T extends { platform: string }>(variants: T[]): T[] {
   return [...variants].sort((a, b) => {
@@ -72,6 +64,7 @@ export default function CampaignDetailPage() {
   const id = params.id as string;
   const [c, setC] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [activePlatformTab, setActivePlatformTab] = useState<Record<string, string>>({});
@@ -80,10 +73,18 @@ export default function CampaignDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/campaigns/${id}`);
-    if (res.ok) {
-      setC(await res.json());
-    } else {
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}`);
+      if (res.ok) {
+        setC(await res.json());
+      } else {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        setLoadError(data.error ?? `Failed to load campaign (${res.status})`);
+        setC(null);
+      }
+    } catch {
+      setLoadError("Network error — could not load campaign");
       setC(null);
     }
     setLoading(false);
@@ -169,9 +170,10 @@ export default function CampaignDetailPage() {
   }
   if (!c) {
     return (
-      <p>
-        Not found. <Link href="/campaigns">Back</Link>
-      </p>
+      <div style={{ maxWidth: 520 }}>
+        <p style={{ color: "var(--danger)", marginBottom: 8 }}>{loadError ?? "Campaign not found."}</p>
+        <Link href="/campaigns" style={{ fontSize: 13, color: "var(--accent)" }}>← Back to campaigns</Link>
+      </div>
     );
   }
 
@@ -492,7 +494,7 @@ export default function CampaignDetailPage() {
                             fontWeight: active ? 600 : 500,
                           }}
                         >
-                          {platformMeta[variant.platform]?.label ?? variant.platform}
+                          <PlatformPill platform={variant.platform} size={12} active={active} />
                         </button>
                       );
                     })}

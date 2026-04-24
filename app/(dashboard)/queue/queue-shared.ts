@@ -1,18 +1,12 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
+export { platformMeta } from "@/lib/platforms";
 
 export type RefCategory = {
   id: string;
   name: string;
   description: string;
   thumbnailUrl: string | null;
-};
-
-export const platformMeta: Record<string, { label: string; cls: string }> = {
-  FACEBOOK: { label: "Facebook", cls: "platform-fb" },
-  INSTAGRAM: { label: "Instagram", cls: "platform-ig" },
-  LINKEDIN: { label: "LinkedIn", cls: "platform-li" },
-  OMG: { label: "OMG Cargo", cls: "platform-omg" },
 };
 
 export const statusBadge: Record<string, string> = {

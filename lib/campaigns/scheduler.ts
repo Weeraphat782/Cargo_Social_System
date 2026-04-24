@@ -90,13 +90,14 @@ export async function runDueCampaigns(): Promise<{
         where: { id: run.id },
         data: { ok: false, finishedAt: new Date(), error: msg },
       });
+      const failedAt = new Date();
       const next = computeNextRun(
         {
           cadence: campaign.cadence,
           dayOfWeek: campaign.dayOfWeek,
           hourOfDay: campaign.hourOfDay,
           timezone: campaign.timezone,
-          lastRunAt: campaign.lastRunAt,
+          lastRunAt: failedAt,
           startAt: campaign.startAt,
           customCron: campaign.customCron,
           scheduleConfig: campaign.scheduleConfig,
@@ -107,7 +108,7 @@ export async function runDueCampaigns(): Promise<{
         where: { id: campaign.id },
         data: {
           nextRunAt: next,
-          lastRunAt: new Date(),
+          lastRunAt: failedAt,
           status: next == null ? CampaignStatus.COMPLETED : CampaignStatus.ACTIVE,
         },
       });
