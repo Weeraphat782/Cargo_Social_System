@@ -9,10 +9,7 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const [
-    pending,
-    approved,
-    scheduled,
-    published,
+    postStatsGroup,
     topicCount,
     topics,
     activeCampaignTotal,
@@ -20,10 +17,10 @@ export default async function DashboardPage() {
     upcomingPosts,
     recentRuns,
   ] = await Promise.all([
-    prisma.post.count({ where: { status: PostStatus.PENDING_APPROVAL } }),
-    prisma.post.count({ where: { status: PostStatus.APPROVED } }),
-    prisma.post.count({ where: { status: PostStatus.SCHEDULED } }),
-    prisma.post.count({ where: { status: PostStatus.PUBLISHED } }),
+    prisma.post.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
     prisma.topic.count(),
     prisma.topic.findMany({
       orderBy: { createdAt: "desc" },
@@ -80,6 +77,12 @@ export default async function DashboardPage() {
     }),
   ]);
 
+  const statsMap = Object.fromEntries(postStatsGroup.map((g) => [g.status, g._count._all]));
+  const pending = statsMap[PostStatus.PENDING_APPROVAL] || 0;
+  const approved = statsMap[PostStatus.APPROVED] || 0;
+  const scheduled = statsMap[PostStatus.SCHEDULED] || 0;
+  const published = statsMap[PostStatus.PUBLISHED] || 0;
+
   const campaignIds = activeCampaigns.map((c) => c.id);
   const publishedRows =
     campaignIds.length > 0
@@ -89,7 +92,7 @@ export default async function DashboardPage() {
           _count: { _all: true },
         })
       : [];
-  const publishedByCampaign = new Map(publishedRows.map((r) => [r.campaignId, r._count._all]));
+  const publishedByCampaign = new Map(publishedRows.map((r) => [r.campaignId!, r._count._all]));
 
   const campaignPayload = activeCampaigns.map((c) => ({
     id: c.id,
