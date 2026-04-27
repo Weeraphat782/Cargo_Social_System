@@ -11,7 +11,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { Megaphone } from "lucide-react";
-import { PageHeader, ProgressBar, Skeleton, StatCard } from "@/components/ui";
+import { PageHeader, PlatformIcon, ProgressBar, Skeleton, StatCard } from "@/components/ui";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
 import {
   defaultCampaignFormFieldsValue,
@@ -58,6 +58,7 @@ type CampaignRow = {
   scheduleConfig: Prisma.JsonValue;
   _count: { posts: number; runs: number };
   publishedCount: number;
+  platforms: Platform[];
 };
 
 /** Short countdown line for campaign row (list view). */
@@ -767,6 +768,11 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                     {c.status} · {c.contentMode === "SELF_PROMO" ? "self-promo" : "news"} · {c.cadence} ·{" "}
                     {c.theme}
                     {c.publishHourOfDay != null && ` · pub: ${c.publishHourOfDay}:00`}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 4 }}>
+                    {c.platforms.map((p) => (
+                      <PlatformIcon key={p} platform={p} size={14} />
+                    ))}
                   </div>
                   <div
                     style={{

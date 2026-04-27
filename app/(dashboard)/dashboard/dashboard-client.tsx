@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard } from "lucide-react";
-import { CountdownRing, PageHeader, ProgressBar, StatCard } from "@/components/ui";
+import { CountdownRing, PageHeader, PlatformIcon, ProgressBar, StatCard } from "@/components/ui";
 import type { CampaignCadence, Prisma } from "@prisma/client";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
 
@@ -250,15 +250,10 @@ export default function DashboardClient({
                           </span>
                           <span suppressHydrationWarning style={{ fontSize: 12, color: "var(--text-muted)" }}>{formatNextRun(c.nextRunAt)}</span>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                          {c.platforms.map((p) => {
-                            const pill = platformPill[p] ?? { label: p, cls: "platform-omg" };
-                            return (
-                              <span key={p} className={`platform-pill ${pill.cls}`}>
-                                {pill.label}
-                              </span>
-                            );
-                          })}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 10, alignItems: "center" }}>
+                          {c.platforms.map((p) => (
+                            <PlatformIcon key={p} platform={p} size={15} />
+                          ))}
                         </div>
                         {progress.showBar ? (
                           <>
@@ -330,7 +325,7 @@ export default function DashboardClient({
                       <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                         <span suppressHydrationWarning style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatScheduleTime(p.scheduledAt)}</span>
-                        <span className={`platform-pill ${pill.cls}`}>{pill.label}</span>
+                          <PlatformIcon platform={p.platform} size={14} />
                       </div>
                       {p.campaignName && (
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--info)" }}>{p.campaignName}</span>

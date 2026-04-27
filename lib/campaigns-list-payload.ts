@@ -29,6 +29,7 @@ export type CampaignListRowJson = {
   customCron: string | null;
   scheduleConfig: Prisma.JsonValue;
   _count: { posts: number; runs: number };
+  platforms: Platform[];
   publishedCount: number;
 };
 
@@ -55,7 +56,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
       postsPerRun: true,
       totalPostsCap: true,
       customCron: true,
-      scheduleConfig: true,
+      platforms: true,
       _count: { select: { posts: true, runs: true } },
     },
   });
@@ -89,6 +90,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
     totalPostsCap: c.totalPostsCap,
     customCron: c.customCron,
     scheduleConfig: c.scheduleConfig,
+    platforms: c.platforms,
     _count: c._count,
     publishedCount: publishedBy.get(c.id) ?? 0,
   }));
