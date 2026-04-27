@@ -105,6 +105,7 @@ model Post {
   @@index([status, createdAt(sort: Desc)])
   @@index([status, scheduledAt])
   @@index([campaignId, createdAt(sort: Desc)])
+  @@index([campaignId, status])
   @@index([topicId])
   @@index([sourceNewsId])
 }

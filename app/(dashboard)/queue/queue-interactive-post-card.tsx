@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import Image from "next/image";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
 import type { RefCategory } from "./queue-shared";
 import { platformMeta, sortByPlatform, statusBadge, type SetPending } from "./queue-shared";
@@ -124,7 +125,14 @@ export function QueueInteractivePostCard({
                   }}
                 >
                   {thumbUrl ? (
-                    <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                      <Image
+                        src={thumbUrl}
+                        alt=""
+                        fill
+                        style={{ objectFit: "cover" }}
+                      />
+                    </div>
                   ) : (
                     <div
                       style={{
@@ -261,11 +269,14 @@ export function QueueInteractivePostCard({
                         </div>
 
                         {v.media[0]?.imageUrl && (
-                          <img
-                            src={v.media[0].imageUrl}
-                            alt=""
-                            style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, marginBottom: 10 }}
-                          />
+                          <div style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                            <Image
+                              src={v.media[0].imageUrl}
+                              alt=""
+                              fill
+                              style={{ objectFit: "cover" }}
+                            />
+                          </div>
                         )}
 
                         <details style={{ marginBottom: 12, fontSize: 12 }}>
@@ -479,16 +490,14 @@ export function QueueInteractivePostCard({
                                         background: "var(--bg-surface)",
                                       }}
                                     >
-                                      <img
-                                        src={c.imageUrl}
-                                        alt=""
-                                        style={{
-                                          width: "100%",
-                                          height: 72,
-                                          objectFit: "cover",
-                                          display: "block",
-                                        }}
-                                      />
+                                      <div style={{ position: "relative", width: "100%", height: 72 }}>
+                                        <Image
+                                          src={c.imageUrl}
+                                          alt=""
+                                          fill
+                                          style={{ objectFit: "cover" }}
+                                        />
+                                      </div>
                                       <button
                                         type="button"
                                         className="omg-btn-ghost"

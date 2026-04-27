@@ -1,4 +1,4 @@
-"use client";
+import Image from "next/image";
 
 type Props = { platform: string; size?: number; className?: string };
 
@@ -38,7 +38,13 @@ export function PlatformIcon({ platform, size = 16, className }: Props) {
     case "OMG":
       return (
         <span className={className} title="OMG Cargo" style={{ display: "inline-flex", alignItems: "center" }}>
-          <img src="/logo/logo-full.avif" alt="OMG Cargo" style={{ width: size, height: size, objectFit: "contain", borderRadius: 2 }} />
+          <Image
+            src="/logo/logo-full.avif"
+            alt="OMG Cargo"
+            width={size}
+            height={size}
+            style={{ objectFit: "contain", borderRadius: 2 }}
+          />
         </span>
       );
     default:

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import Image from "next/image";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
 import { platformMeta, sortByPlatform, statusBadge } from "./queue-shared";
 import { PlatformPill } from "@/components/ui";
@@ -75,7 +76,14 @@ export function QueuePublishedPostCard({
                     }}
                   >
                     {thumbUrl ? (
-                      <img src={thumbUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                        <Image
+                          src={thumbUrl}
+                          alt=""
+                          fill
+                          style={{ objectFit: "cover" }}
+                        />
+                      </div>
                     ) : (
                       <div
                         style={{
@@ -198,11 +206,14 @@ export function QueuePublishedPostCard({
                               </span>
                             </div>
                             {v.media[0]?.imageUrl && (
-                              <img
-                                src={v.media[0].imageUrl}
-                                alt=""
-                                style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, marginBottom: 10 }}
-                              />
+                              <div style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                                <Image
+                                  src={v.media[0].imageUrl}
+                                  alt=""
+                                  fill
+                                  style={{ objectFit: "cover" }}
+                                />
+                              </div>
                             )}
                             {v.platform === "OMG" && (
                               <>
