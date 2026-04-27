@@ -404,7 +404,7 @@ export default function CampaignDetailPage() {
                 <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: 8 }}>{new Date(r.startedAt).toLocaleString()}</td>
                   <td style={{ padding: 8 }}>{r.ok ? "✅" : "❌"}</td>
-                  <td style={{ padding: 8 }}>{r.postIds?.length ? `${r.postIds.length} posts` : "—"}</td>
+                  <td style={{ padding: 8 }}>{r.postId ? "1 post" : "—"}</td>
                   <td style={{ padding: 8, color: r.ok ? "inherit" : "var(--danger)" }}>{r.error ?? "—"}</td>
                 </tr>
               ))
