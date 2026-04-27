@@ -28,16 +28,14 @@ export function CountdownRing({
   stroke?: number;
 }) {
   const gradId = useId().replace(/:/g, "");
-  const [now, setNow] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
 
   const { progress, text, isDue } = useMemo(() => {
-    if (now === null) return { progress: 0, text: "…", isDue: false };
     const target = new Date(targetIso).getTime();
     const left = target - now;
     const p = left <= 0 ? 1 : 1 - Math.min(1, left / WINDOW_MS);

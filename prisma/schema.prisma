@@ -121,6 +121,9 @@ model Campaign {
   cadence       CampaignCadence
   dayOfWeek     Int?
   hourOfDay     Int?
+  /// Desired wall-clock hour (0-23) for the post to actually go live.
+  /// When null + autoApprove, posts publish ~2 min after the agent run.
+  publishHourOfDay Int?
   timezone      String            @default("Asia/Bangkok")
   customCron    String?
   scheduleConfig Json?

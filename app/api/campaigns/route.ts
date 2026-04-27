@@ -44,6 +44,7 @@ export async function POST(req: Request) {
     postsPerRun?: number;
     totalPostsCap?: number | null;
     autoApprove?: boolean;
+    publishHourOfDay?: number | null;
     startAt?: string;
     endAt?: string | null;
     status?: CampaignStatus;
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
   const postsPerRun = Math.min(5, Math.max(1, body.postsPerRun ?? 1));
   const dayOfWeek = body.dayOfWeek ?? 1;
   const hourOfDay = body.hourOfDay ?? 9;
+  const publishHourOfDay =
+    body.publishHourOfDay != null
+      ? Math.max(0, Math.min(23, body.publishHourOfDay))
+      : null;
   const timezone = (body.timezone ?? "Asia/Bangkok").trim() || "Asia/Bangkok";
 
   const nextRunAt =
@@ -173,6 +178,7 @@ export async function POST(req: Request) {
       postsPerRun,
       totalPostsCap: body.totalPostsCap ?? null,
       autoApprove: body.autoApprove ?? false,
+      publishHourOfDay,
       startAt,
       endAt,
       nextRunAt,

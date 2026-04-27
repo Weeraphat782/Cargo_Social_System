@@ -114,13 +114,8 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
 
   const [preview, setPreview] = useState<string[]>([]);
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   const runPreview = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
     const testDatetimes = value.testDatetimes ?? [];
     const sc = buildScheduleConfigJson(
       cadence,
@@ -132,34 +127,29 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
       value.runUntilYmd?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(value.runUntilYmd.trim())
         ? endOfDayYmdToIso(value.runUntilYmd.trim(), timezone)
         : undefined;
-    try {
-      const res = await fetch("/api/campaigns/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          cadence,
-          dayOfWeek,
-          hourOfDay,
-          timezone,
-          startAt: new Date().toISOString(),
-          endAt: endAt ?? null,
-          scheduleConfig:
-            sc &&
-            (cadence === "DAILY" ||
-              cadence === "WEEKLY_MULTI" ||
-              cadence === "SPECIFIC_DATES" ||
-              cadence === "TEST_MINUTES")
-              ? sc
-              : null,
-        }),
-      });
-      if (res.ok) {
-        const d = (await res.json()) as { dates: string[] };
-        setPreview(d.dates ?? []);
-      }
-    } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") return;
+    const res = await fetch("/api/campaigns/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cadence,
+        dayOfWeek,
+        hourOfDay,
+        timezone,
+        startAt: new Date().toISOString(),
+        endAt: endAt ?? null,
+        scheduleConfig:
+          sc &&
+          (cadence === "DAILY" ||
+            cadence === "WEEKLY_MULTI" ||
+            cadence === "SPECIFIC_DATES" ||
+            cadence === "TEST_MINUTES")
+            ? sc
+            : null,
+      }),
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { dates: string[] };
+      setPreview(d.dates ?? []);
     }
   }, [
     cadence,
@@ -350,7 +340,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
             onClick={() => {
               const y0 = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
               const base = toDate(`${y0}T12:00:00`, { timeZone: timezone });
-              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 6), timezone, "yyyy-MM-dd") });
+              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 7), timezone, "yyyy-MM-dd") });
             }}
           >
             +1 week
@@ -362,7 +352,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
             onClick={() => {
               const y0 = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
               const base = toDate(`${y0}T12:00:00`, { timeZone: timezone });
-              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 13), timezone, "yyyy-MM-dd") });
+              onChange({ runUntilYmd: formatInTimeZone(addDays(base, 14), timezone, "yyyy-MM-dd") });
             }}
           >
             +2 weeks

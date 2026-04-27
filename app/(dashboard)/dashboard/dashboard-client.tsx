@@ -4,10 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard } from "lucide-react";
-import { CountdownRing, PageHeader, PlatformIcon, ProgressBar, StatCard } from "@/components/ui";
+import { CountdownRing, PageHeader, ProgressBar, StatCard } from "@/components/ui";
 import type { CampaignCadence, Prisma } from "@prisma/client";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
-import { platformPill } from "@/lib/platforms";
 
 export type DashboardStats = {
   pending: number;
@@ -54,6 +53,12 @@ export type DashboardRecentRun = {
   campaignName: string;
 };
 
+const platformPill: Record<string, { label: string; cls: string }> = {
+  FACEBOOK: { label: "FB", cls: "platform-fb" },
+  INSTAGRAM: { label: "IG", cls: "platform-ig" },
+  LINKEDIN: { label: "LI", cls: "platform-li" },
+  OMG: { label: "OMG", cls: "platform-omg" },
+};
 
 function formatNextRun(iso: string | null) {
   if (!iso) return "Not scheduled";
@@ -245,10 +250,15 @@ export default function DashboardClient({
                           </span>
                           <span suppressHydrationWarning style={{ fontSize: 12, color: "var(--text-muted)" }}>{formatNextRun(c.nextRunAt)}</span>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                          {c.platforms.map((p) => (
-                            <PlatformIcon key={p} platform={p} size={15} />
-                          ))}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                          {c.platforms.map((p) => {
+                            const pill = platformPill[p] ?? { label: p, cls: "platform-omg" };
+                            return (
+                              <span key={p} className={`platform-pill ${pill.cls}`}>
+                                {pill.label}
+                              </span>
+                            );
+                          })}
                         </div>
                         {progress.showBar ? (
                           <>
@@ -302,23 +312,25 @@ export default function DashboardClient({
               <p style={{ margin: 0, padding: "20px 16px", fontSize: 13, color: "var(--text-muted)" }}>No scheduled posts yet.</p>
             ) : (
               <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {upcoming.map((p) => (
-                  <li
-                    key={p.id}
-                    style={{
-                      padding: "10px 16px",
-                      borderBottom: "1px solid var(--border-muted)",
-                      display: "grid",
-                      gridTemplateColumns: "auto 1fr",
-                      gap: 8,
-                      alignItems: "start",
-                    }}
-                  >
-                    <CountdownRing targetIso={p.scheduledAt} label="Publish" size={44} />
-                    <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
+                {upcoming.map((p) => {
+                  const pill = platformPill[p.platform] ?? { label: p.platform, cls: "platform-omg" };
+                  return (
+                    <li
+                      key={p.id}
+                      style={{
+                        padding: "10px 16px",
+                        borderBottom: "1px solid var(--border-muted)",
+                        display: "grid",
+                        gridTemplateColumns: "auto 1fr",
+                        gap: 8,
+                        alignItems: "start",
+                      }}
+                    >
+                      <CountdownRing targetIso={p.scheduledAt} label="Publish" size={44} />
+                      <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                         <span suppressHydrationWarning style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatScheduleTime(p.scheduledAt)}</span>
-                        <PlatformIcon platform={p.platform} size={15} />
+                        <span className={`platform-pill ${pill.cls}`}>{pill.label}</span>
                       </div>
                       {p.campaignName && (
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--info)" }}>{p.campaignName}</span>
@@ -326,9 +338,10 @@ export default function DashboardClient({
                       {p.captionSnippet ? (
                         <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{p.captionSnippet}</p>
                       ) : null}
-                    </div>
-                  </li>
-                ))}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

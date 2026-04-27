@@ -30,6 +30,7 @@ export type CampaignFormFieldsValue = {
   postsPerRun: number;
   totalPostsCap: string;
   autoApprove: boolean;
+  publishHourOfDay: number | null;
 };
 
 type Props = {
@@ -58,6 +59,7 @@ export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
     postsPerRun: 1,
     totalPostsCap: "",
     autoApprove: false,
+    publishHourOfDay: null,
   };
 }
 
@@ -82,6 +84,7 @@ export function campaignToFormFieldsValue(
     | "postsPerRun"
     | "totalPostsCap"
     | "autoApprove"
+    | "publishHourOfDay"
   > & { endAt?: string | Date | null }
 ): CampaignFormFieldsValue {
   const base = defaultScheduleValue();
@@ -123,6 +126,7 @@ export function campaignToFormFieldsValue(
     postsPerRun: c.postsPerRun,
     totalPostsCap: c.totalPostsCap != null ? String(c.totalPostsCap) : "",
     autoApprove: c.autoApprove,
+    publishHourOfDay: c.publishHourOfDay ?? null,
   };
 }
 
@@ -144,7 +148,7 @@ export function CampaignFormFields({
   onAdvancedOpenChange,
   alwaysShowAdvanced = false,
 }: Props) {
-  const { name, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove } = value;
+  const { name, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove, publishHourOfDay } = value;
 
   const advancedBlock = (
     <div style={{ display: "grid", gap: 12 }}>
@@ -219,6 +223,28 @@ export function CampaignFormFields({
             />
             Auto-approve
           </label>
+          {autoApprove && (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 220 }}>
+              Publish hour (0–23)
+              <input
+                className="omg-input"
+                type="number"
+                min={0}
+                max={23}
+                value={publishHourOfDay ?? ""}
+                placeholder="e.g. 10"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  onChange({
+                    publishHourOfDay: v === "" ? null : Math.max(0, Math.min(23, parseInt(v, 10) || 0)),
+                  });
+                }}
+              />
+              <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                Posts will publish at this hour. Leave empty to publish ~2 min after the agent runs.
+              </span>
+            </label>
+          )}
         </>
       ) : null}
     </div>
@@ -309,6 +335,28 @@ export function CampaignFormFields({
             />
             Auto-approve
           </label>
+          {autoApprove && (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 280 }}>
+              Publish hour (0–23)
+              <input
+                className="omg-input"
+                type="number"
+                min={0}
+                max={23}
+                value={publishHourOfDay ?? ""}
+                placeholder="e.g. 10"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  onChange({
+                    publishHourOfDay: v === "" ? null : Math.max(0, Math.min(23, parseInt(v, 10) || 0)),
+                  });
+                }}
+              />
+              <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                Posts will publish at this hour. Leave empty to publish ~2 min after the agent runs.
+              </span>
+            </label>
+          )}
         </div>
       )}
 

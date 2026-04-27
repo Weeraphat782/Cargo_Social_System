@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
+import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/scheduler";
 import type { CampaignCadence, Prisma } from "@prisma/client";
 
 export async function POST(req: Request) {

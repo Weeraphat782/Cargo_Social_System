@@ -46,6 +46,7 @@ type CampaignRow = {
   keywords: string;
   nextRunAt: string | null;
   autoApprove: boolean;
+  publishHourOfDay: number | null;
   timezone: string;
   startAt: string;
   endAt: string | null;
@@ -201,6 +202,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : undefined,
           autoApprove,
+          publishHourOfDay: manualForm.publishHourOfDay,
           endAt: schedule.runUntilYmd?.trim()
             ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
             : null,
@@ -249,6 +251,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       postsPerRun: s.postsPerRun,
       totalPostsCap: "",
       autoApprove: s.autoApprove,
+      publishHourOfDay: null,
     });
   }
 
@@ -279,6 +282,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           postsPerRun: draft.postsPerRun,
           totalPostsCap: draft.totalPostsCap ? parseInt(draft.totalPostsCap, 10) : undefined,
           autoApprove: draft.autoApprove,
+          publishHourOfDay: draft.publishHourOfDay,
           endAt: sch.runUntilYmd?.trim()
             ? endOfDayYmdToIso(sch.runUntilYmd.trim(), sch.timezone)
             : null,
@@ -762,6 +766,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     {c.status} · {c.contentMode === "SELF_PROMO" ? "self-promo" : "news"} · {c.cadence} ·{" "}
                     {c.theme}
+                    {c.publishHourOfDay != null && ` · pub: ${c.publishHourOfDay}:00`}
                   </div>
                   <div
                     style={{

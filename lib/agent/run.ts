@@ -12,8 +12,9 @@ import {
 } from "@prisma/client";
 import { addMinutes } from "date-fns";
 import { prisma } from "@/lib/db";
+import { nextDailySlot } from "@/lib/campaigns/schedule-math";
 import { requireEnv } from "@/lib/env";
-import { searchNews, type GoogleNewsResult } from "@/lib/news";
+import { searchNews, searchNewsWithGemini, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import { OMG_SERVICES, PROMO_GUIDANCE } from "@/lib/agent/promo-config";
@@ -437,6 +438,79 @@ For SELF-PROMO (no news article), base imagePrompt.subject and keyElements on th
   return parsed;
 }
 
+/**
+ * Retry news search with progressively broader keywords.
+ * 1. Original keywords
+ * 2. Simplified keywords (first 3 meaningful words)
+ * 3. Explicit Gemini grounded search with original keywords
+ * 4. Explicit Gemini grounded search with simplified keywords
+ */
+async function searchNewsWithRetry(
+  keywords: string,
+  opts?: { num?: number }
+): Promise<GoogleNewsResult[]> {
+  const RETRY_DELAY_MS = [0, 3_000, 5_000];
+  const kw = keywords.trim();
+  // Simplify: take first 3 words, strip quotes
+  const simplified = kw
+    .replace(/["']/g, "")
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" ");
+
+  const strategies: { label: string; fn: () => Promise<GoogleNewsResult[]> }[] = [
+    { label: "original keywords", fn: () => searchNews(kw, opts) },
+  ];
+  if (simplified && simplified !== kw) {
+    strategies.push({
+      label: `simplified ("${simplified}")`,
+      fn: () => searchNews(simplified, opts),
+    });
+  }
+  strategies.push({
+    label: "Gemini grounded (original)",
+    fn: () => searchNewsWithGemini(kw, opts),
+  });
+  if (simplified && simplified !== kw) {
+    strategies.push({
+      label: `Gemini grounded ("${simplified}")`,
+      fn: () => searchNewsWithGemini(simplified, opts),
+    });
+  }
+
+  for (let i = 0; i < strategies.length; i++) {
+    const { label, fn } = strategies[i];
+    const delay = RETRY_DELAY_MS[i] ?? 5_000;
+    if (delay > 0) {
+      await new Promise((r) => setTimeout(r, delay));
+    }
+    try {
+      const results = await fn();
+      if (results.length > 0) {
+        if (i > 0) {
+          console.info(
+            `[searchNewsWithRetry] Succeeded on attempt ${i + 1}/${strategies.length} (${label}): ${results.length} result(s)`
+          );
+        }
+        return results;
+      }
+      console.warn(
+        `[searchNewsWithRetry] Attempt ${i + 1}/${strategies.length} (${label}): 0 results`
+      );
+    } catch (err) {
+      console.warn(
+        `[searchNewsWithRetry] Attempt ${i + 1}/${strategies.length} (${label}) failed:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  throw new Error(
+    `No news results after ${strategies.length} attempts (keywords: "${kw}"). All search strategies exhausted.`
+  );
+}
+
 export type RunAgentForCampaignOptions = {
   /** When true, only ACTIVE campaigns run. Manual UI uses false. */
   forCron?: boolean;
@@ -475,10 +549,7 @@ export async function runAgentForCampaign(
       throw new Error("News-driven campaigns require non-empty keywords for search");
     }
     const num = Math.max(5, campaign.postsPerRun);
-    results = await searchNews(kw, { num });
-    if (!results.length) {
-      throw new Error("No news results returned from search provider");
-    }
+    results = await searchNewsWithRetry(kw, { num });
   }
 
   const postIds: string[] = [];
@@ -619,9 +690,21 @@ export async function runAgentForCampaign(
     const finalStatus = campaign.autoApprove
       ? PostStatus.SCHEDULED
       : PostStatus.PENDING_APPROVAL;
-    const scheduleAt = campaign.autoApprove
-      ? addMinutes(new Date(), 2 + i * BATCH_SPREAD_MINUTES)
-      : null;
+    let scheduleAt: Date | null = null;
+    if (campaign.autoApprove) {
+      if (campaign.publishHourOfDay != null) {
+        // Schedule at the desired publish hour in campaign timezone
+        const tz = campaign.timezone || "Asia/Bangkok";
+        scheduleAt = nextDailySlot(
+          addMinutes(new Date(), i * BATCH_SPREAD_MINUTES),
+          tz,
+          campaign.publishHourOfDay
+        );
+      } else {
+        // Legacy: publish ~2 min after agent runs
+        scheduleAt = addMinutes(new Date(), 2 + i * BATCH_SPREAD_MINUTES);
+      }
+    }
 
     await prisma.post.update({
       where: { id: created.id },

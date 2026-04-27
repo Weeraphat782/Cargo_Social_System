@@ -7,8 +7,7 @@ import { FileStack } from "lucide-react";
 import type { Campaign, CampaignRun, CampaignStatus } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
-import { platformMeta, PLATFORM_ORDER } from "@/lib/platforms";
-import { CountdownRing, PageHeader, PlatformPill, ProgressBar, Skeleton } from "@/components/ui";
+import { CountdownRing, PageHeader, ProgressBar, Skeleton } from "@/components/ui";
 
 type CampaignPost = {
   id: string;
@@ -30,12 +29,30 @@ type CampaignPost = {
   }>;
 };
 
+type LogRow = {
+  id: string;
+  platform: string;
+  attemptAt: string;
+  success: boolean;
+  remoteId: string | null;
+  errorMessage: string | null;
+  post: { topic: { name: string } | null };
+};
+
 type CampaignDetail = Campaign & {
   _count: { posts: number };
   publishedCount: number;
   upcomingRuns: string[];
   runs: CampaignRun[];
+  publishLogs: LogRow[];
   posts: CampaignPost[];
+};
+
+const platformMeta: Record<string, { label: string; cls: string }> = {
+  FACEBOOK: { label: "Facebook", cls: "platform-fb" },
+  INSTAGRAM: { label: "Instagram", cls: "platform-ig" },
+  LINKEDIN: { label: "LinkedIn", cls: "platform-li" },
+  OMG: { label: "OMG Cargo", cls: "platform-omg" },
 };
 
 const statusBadge: Record<string, string> = {
@@ -47,6 +64,8 @@ const statusBadge: Record<string, string> = {
   SCHEDULED: "omg-badge-scheduled",
   DRAFTING: "omg-badge-pending",
 };
+
+const PLATFORM_ORDER = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as const;
 
 function sortByPlatform<T extends { platform: string }>(variants: T[]): T[] {
   return [...variants].sort((a, b) => {
@@ -64,7 +83,6 @@ export default function CampaignDetailPage() {
   const id = params.id as string;
   const [c, setC] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [activePlatformTab, setActivePlatformTab] = useState<Record<string, string>>({});
@@ -73,18 +91,10 @@ export default function CampaignDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await fetch(`/api/campaigns/${id}`);
-      if (res.ok) {
-        setC(await res.json());
-      } else {
-        const data = await res.json().catch(() => ({})) as { error?: string };
-        setLoadError(data.error ?? `Failed to load campaign (${res.status})`);
-        setC(null);
-      }
-    } catch {
-      setLoadError("Network error — could not load campaign");
+    const res = await fetch(`/api/campaigns/${id}`);
+    if (res.ok) {
+      setC(await res.json());
+    } else {
       setC(null);
     }
     setLoading(false);
@@ -170,10 +180,9 @@ export default function CampaignDetailPage() {
   }
   if (!c) {
     return (
-      <div style={{ maxWidth: 520 }}>
-        <p style={{ color: "var(--danger)", marginBottom: 8 }}>{loadError ?? "Campaign not found."}</p>
-        <Link href="/campaigns" style={{ fontSize: 13, color: "var(--accent)" }}>← Back to campaigns</Link>
-      </div>
+      <p>
+        Not found. <Link href="/campaigns">Back</Link>
+      </p>
     );
   }
 
@@ -310,17 +319,20 @@ export default function CampaignDetailPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 28, maxWidth: 1100 }}>
         <div>
           <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Schedule</h2>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", display: "grid", gap: 4 }}>
-            <span>Next run: {c.nextRunAt ? new Date(c.nextRunAt).toLocaleString() : "—"}</span>
-            <span>Last run: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : "—"}</span>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Next run: {c.nextRunAt ? new Date(c.nextRunAt).toLocaleString() : "—"}
+            <br />
+            Last run: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : "—"}
+            <br />
             {c.cadence === "TEST_MINUTES" && Array.isArray((c.scheduleConfig as { datetimes?: string[] } | null)?.datetimes) ? (
-              <span>
+              <>
                 Test slots (TZ {c.timezone}):{" "}
                 {((c.scheduleConfig as { datetimes: string[] }).datetimes || []).join(", ")}
-              </span>
+                <br />
+              </>
             ) : null}
             {c.upcomingRuns.length > 0 ? (
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
                   Upcoming runs
                 </div>
@@ -343,12 +355,24 @@ export default function CampaignDetailPage() {
                     <li style={{ listStyle: "none", color: "var(--text-secondary)" }}>+{c.upcomingRuns.length - 8} more</li>
                   ) : null}
                 </ul>
-                <span>posts/run: {c.postsPerRun} · TZ {c.timezone}</span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  posts/run: {c.postsPerRun} · TZ {c.timezone}
+                </span>
+                <br />
               </div>
             ) : (
-              <span>Day: {c.dayOfWeek} · Hour: {c.hourOfDay} · posts/run: {c.postsPerRun}</span>
+              <>
+                Day: {c.dayOfWeek} · Hour: {c.hourOfDay} · posts/run: {c.postsPerRun}
+                <br />
+              </>
             )}
-            <span>Auto-approve: {c.autoApprove ? "yes" : "no"}</span>
+            Auto-approve: {c.autoApprove ? "yes" : "no"}
+            {c.autoApprove && (
+              <>
+                <br />
+                Publish hour: {c.publishHourOfDay != null ? `${c.publishHourOfDay}:00` : "Immediate (~2 min after draft)"}
+              </>
+            )}
           </div>
         </div>
         <div>
@@ -357,31 +381,79 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginTop: 24 }}>Recent runs</h2>
-      <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+      <h2 style={{ fontSize: 14, fontWeight: 600, marginTop: 28 }}>Agent runs (Drafting)</h2>
+      <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
         <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "var(--bg-elevated)", textAlign: "left" }}>
               <th style={{ padding: 8 }}>Started</th>
               <th style={{ padding: 8 }}>OK</th>
-              <th style={{ padding: 8 }}>Post</th>
-              <th style={{ padding: 8 }}>Error</th>
+              <th style={{ padding: 8 }}>Post Result</th>
+              <th style={{ padding: 8 }}>Error/Details</th>
             </tr>
           </thead>
           <tbody>
-            {c.runs.length === 0 ? (
+            {(c.runs ?? []).length === 0 ? (
               <tr>
                 <td colSpan={4} style={{ padding: 12, color: "var(--text-muted)" }}>
-                  No runs yet
+                  No agent runs yet
                 </td>
               </tr>
             ) : (
-              c.runs.map((r) => (
+              (c.runs ?? []).map((r) => (
                 <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: 8 }}>{new Date(r.startedAt).toLocaleString()}</td>
-                  <td style={{ padding: 8 }}>{r.ok ? "yes" : "no"}</td>
-                  <td style={{ padding: 8 }}>{r.postId ? r.postId.slice(0, 8) + "…" : "—"}</td>
-                  <td style={{ padding: 8, color: "var(--danger)" }}>{r.error ?? "—"}</td>
+                  <td style={{ padding: 8 }}>{r.ok ? "✅" : "❌"}</td>
+                  <td style={{ padding: 8 }}>{r.postIds?.length ? `${r.postIds.length} posts` : "—"}</td>
+                  <td style={{ padding: 8, color: r.ok ? "inherit" : "var(--danger)" }}>{r.error ?? "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 style={{ fontSize: 14, fontWeight: 600, marginTop: 24 }}>Publish runs (Post history)</h2>
+      <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "var(--bg-elevated)", textAlign: "left" }}>
+              <th style={{ padding: 8 }}>Time</th>
+              <th style={{ padding: 8 }}>Platform</th>
+              <th style={{ padding: 8 }}>Status</th>
+              <th style={{ padding: 8 }}>Result/Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(c.publishLogs ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={4} style={{ padding: 12, color: "var(--text-muted)" }}>
+                  No publish attempts yet
+                </td>
+              </tr>
+            ) : (
+              (c.publishLogs ?? []).map((l) => (
+                <tr key={l.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: 8 }}>{new Date(l.attemptAt).toLocaleString()}</td>
+                  <td style={{ padding: 8 }}>
+                    <span className={`platform-pill ${platformMeta[l.platform]?.cls ?? ""}`}>
+                      {platformMeta[l.platform]?.label ?? l.platform}
+                    </span>
+                  </td>
+                  <td style={{ padding: 8 }}>
+                    {l.success ? (
+                      <span style={{ color: "var(--success)", fontWeight: 600 }}>Success</span>
+                    ) : (
+                      <span style={{ color: "var(--danger)", fontWeight: 600 }}>Failed</span>
+                    )}
+                  </td>
+                  <td style={{ padding: 8, fontSize: 11 }}>
+                    {l.success ? (
+                      <span style={{ color: "var(--text-muted)" }}>ID: {l.remoteId?.slice(0, 12) ?? "—"}</span>
+                    ) : (
+                      <span style={{ color: "var(--danger)" }}>{l.errorMessage ?? "Unknown error"}</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -494,7 +566,7 @@ export default function CampaignDetailPage() {
                             fontWeight: active ? 600 : 500,
                           }}
                         >
-                          <PlatformPill platform={variant.platform} size={12} active={active} />
+                          {platformMeta[variant.platform]?.label ?? variant.platform}
                         </button>
                       );
                     })}

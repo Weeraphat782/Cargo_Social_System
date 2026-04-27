@@ -32,6 +32,7 @@ type CampaignLoad = {
   postsPerRun: number;
   totalPostsCap: number | null;
   autoApprove: boolean;
+  publishHourOfDay: number | null;
   endAt: string | null;
 };
 
@@ -112,6 +113,7 @@ export default function EditCampaignPage() {
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : null,
           autoApprove,
+          publishHourOfDay: form.publishHourOfDay,
           endAt: schedule.runUntilYmd?.trim()
             ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
             : null,

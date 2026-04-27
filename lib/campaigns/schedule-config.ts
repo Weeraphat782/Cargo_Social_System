@@ -1,8 +1,5 @@
 import { Prisma, type CampaignCadence } from "@prisma/client";
 
-export const MAX_POSTS_PER_RUN = 5;
-export const clampPostsPerRun = (n: number) => Math.max(1, Math.min(MAX_POSTS_PER_RUN, n || 1));
-
 export type ScheduleConfigJson = Prisma.JsonValue;
 
 /** Parsed schedule; used by scheduler. */

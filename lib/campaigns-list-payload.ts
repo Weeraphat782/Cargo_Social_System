@@ -18,6 +18,7 @@ export type CampaignListRowJson = {
   keywords: string;
   nextRunAt: string | null;
   autoApprove: boolean;
+  publishHourOfDay: number | null;
   timezone: string;
   startAt: string;
   endAt: string | null;
@@ -45,6 +46,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
       keywords: true,
       nextRunAt: true,
       autoApprove: true,
+      publishHourOfDay: true,
       timezone: true,
       startAt: true,
       endAt: true,
@@ -77,6 +79,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
     keywords: c.keywords,
     nextRunAt: c.nextRunAt?.toISOString() ?? null,
     autoApprove: c.autoApprove,
+    publishHourOfDay: c.publishHourOfDay,
     timezone: c.timezone,
     startAt: c.startAt.toISOString(),
     endAt: c.endAt?.toISOString() ?? null,

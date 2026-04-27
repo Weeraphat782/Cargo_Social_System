@@ -11,11 +11,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
-import { parseScheduleConfig, toStoredScheduleConfig, clampPostsPerRun } from "@/lib/campaigns/schedule-config";
+import { parseScheduleConfig, toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
 import type { CampaignCadence, CampaignTheme } from "@prisma/client";
 
 const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
-const TEST_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 type PatchBody = {
   name?: string;
@@ -33,6 +32,7 @@ type PatchBody = {
   postsPerRun?: number;
   totalPostsCap?: number | null;
   autoApprove?: boolean;
+  publishHourOfDay?: number | null;
   startAt?: string;
   endAt?: string | null;
   status?: CampaignStatus;
@@ -50,7 +50,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const [c, publishedCount] = await Promise.all([
+  const [c, publishedCount, publishLogs] = await Promise.all([
     prisma.campaign.findUnique({
       where: { id },
       include: {
@@ -90,6 +90,12 @@ export async function GET(
     prisma.post.count({
       where: { campaignId: id, status: PostStatus.PUBLISHED },
     }),
+    prisma.publishLog.findMany({
+      where: { post: { campaignId: id } },
+      include: { post: { select: { topic: { select: { name: true } } } } },
+      orderBy: { attemptAt: "desc" },
+      take: 20,
+    }),
   ]);
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -108,7 +114,7 @@ export async function GET(
     : previewNextRuns(schedIn, 8)
   ).map((d) => d.toISOString());
 
-  return NextResponse.json({ ...c, publishedCount, upcomingRuns });
+  return NextResponse.json({ ...c, publishedCount, publishLogs, upcomingRuns });
 }
 
 export async function PATCH(
@@ -173,7 +179,7 @@ export async function PATCH(
         (effectiveCadence === "WEEKLY_MULTI" ? [existing.dayOfWeek ?? 1] : []);
       const dates = body.specificDates ?? pe.dates ?? [];
       const testD = (body.testDatetimes ?? pe.datetimes ?? []).filter((d) =>
-        TEST_DATETIME_RE.test(d)
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
       );
       if (effectiveCadence === "TEST_MINUTES" && testD.length === 0) {
         return NextResponse.json({ error: "Add at least one test datetime" }, { status: 400 });
@@ -193,10 +199,16 @@ export async function PATCH(
     u.scheduleConfig = body.scheduleConfig === null ? Prisma.JsonNull : body.scheduleConfig;
   }
   if (body.postsPerRun != null) {
-    u.postsPerRun = clampPostsPerRun(body.postsPerRun);
+    u.postsPerRun = Math.min(5, Math.max(1, body.postsPerRun));
   }
   if (body.totalPostsCap !== undefined) u.totalPostsCap = body.totalPostsCap;
   if (body.autoApprove != null) u.autoApprove = body.autoApprove;
+  if (body.publishHourOfDay !== undefined) {
+    u.publishHourOfDay =
+      body.publishHourOfDay != null
+        ? Math.max(0, Math.min(23, body.publishHourOfDay))
+        : null;
+  }
   if (body.startAt) u.startAt = new Date(body.startAt);
   if (body.endAt !== undefined) u.endAt = body.endAt ? new Date(body.endAt) : null;
   if (body.status != null) u.status = body.status;
@@ -207,7 +219,7 @@ export async function PATCH(
   const mergedCadence = body.cadence ?? existing.cadence;
   const mergedParsed = parseScheduleConfig(mergedCadence, existing.scheduleConfig);
   const mergedTestD = (body.testDatetimes ?? mergedParsed.datetimes ?? []).filter((d) =>
-    TEST_DATETIME_RE.test(d)
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
   );
   const mergedScheduleForCompute: Prisma.JsonValue | null =
     mergedCadence === "DAILY" ||

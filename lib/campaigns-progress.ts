@@ -3,7 +3,6 @@ import {
   previewNextRunsInRange,
   type ComputeNextRunInput,
 } from "@/lib/campaigns/schedule-math";
-import { clampPostsPerRun } from "@/lib/campaigns/schedule-config";
 
 export type CampaignProgressBarInput = {
   totalPostsCap: number | null;
@@ -57,7 +56,7 @@ export function getExpectedPostBudget(p: CampaignProgressBarInput): number | nul
   const c = toComputeInput(p);
   const start = new Date(p.startAt);
   const runDates = previewNextRunsInRange(c, start, end, 500);
-  const perRun = clampPostsPerRun(p.postsPerRun);
+  const perRun = Math.max(1, Math.min(5, p.postsPerRun || 1));
   return runDates.length * perRun;
 }
 
@@ -65,7 +64,7 @@ export function getCampaignProgressBar(
   p: CampaignProgressBarInput
 ): CampaignProgressBarResult {
   const { postCount, publishedCount } = p;
-  const perRun = clampPostsPerRun(p.postsPerRun);
+  const perRun = Math.max(1, Math.min(5, p.postsPerRun || 1));
   const expectedFromEnd = getExpectedPostBudget(p);
 
   let max: number | null = null;

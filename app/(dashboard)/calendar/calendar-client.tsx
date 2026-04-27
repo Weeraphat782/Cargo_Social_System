@@ -2,8 +2,7 @@
 
 import { useMemo } from "react";
 import { Calendar } from "lucide-react";
-import { CollapsibleSection, CountdownRing, MotionList, PageHeader, PlatformIcon, PlatformPill, SectionHeading } from "@/components/ui";
-import { platformMeta, sortByPlatform } from "@/lib/platforms";
+import { CollapsibleSection, CountdownRing, MotionList, PageHeader, SectionHeading } from "@/components/ui";
 
 type Post = {
   id: string;
@@ -22,6 +21,22 @@ type UpcomingCampaign = {
   platforms: string[];
 };
 
+const platformMeta: Record<string, { label: string; cls: string }> = {
+  FACEBOOK: { label: "Facebook", cls: "platform-fb" },
+  INSTAGRAM: { label: "Instagram", cls: "platform-ig" },
+  LINKEDIN: { label: "LinkedIn", cls: "platform-li" },
+  OMG: { label: "OMG Cargo", cls: "platform-omg" },
+};
+
+const PLATFORM_ORDER = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"] as const;
+
+function sortByPlatform<T extends { platform: string }>(variants: T[]): T[] {
+  return [...variants].sort((a, b) => {
+    const ia = PLATFORM_ORDER.indexOf(a.platform as (typeof PLATFORM_ORDER)[number]);
+    const ib = PLATFORM_ORDER.indexOf(b.platform as (typeof PLATFORM_ORDER)[number]);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
 
 function groupByDate(posts: Post[], dateField: "scheduledAt" | "publishedAt"): Record<string, Post[]> {
   return posts.reduce<Record<string, Post[]>>((acc, post) => {
@@ -101,7 +116,7 @@ export default function CalendarClient({
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {sortByPlatform(c.platforms.map((platform) => ({ platform }))).map(({ platform }) => (
                       <span key={platform} className={`platform-pill ${platformMeta[platform]?.cls ?? ""}`}>
-                        <PlatformPill platform={platform} size={11} />
+                        {platformMeta[platform]?.label ?? platform}
                       </span>
                     ))}
                   </div>
@@ -155,7 +170,7 @@ export default function CalendarClient({
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         {sortByPlatform(p.variants ?? []).map((v) => (
                           <span key={v.platform} className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                            <PlatformPill platform={v.platform} size={11} />
+                            {platformMeta[v.platform]?.label ?? v.platform}
                           </span>
                         ))}
                       </div>
@@ -224,7 +239,7 @@ export default function CalendarClient({
                         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                           {sortByPlatform(p.variants ?? []).map((v) => (
                             <span key={v.platform} className={`platform-pill ${platformMeta[v.platform]?.cls ?? ""}`}>
-                              <PlatformPill platform={v.platform} size={11} />
+                              {platformMeta[v.platform]?.label ?? v.platform}
                             </span>
                           ))}
                         </div>
