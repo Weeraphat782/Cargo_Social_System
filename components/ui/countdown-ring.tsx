@@ -28,14 +28,20 @@ export function CountdownRing({
   stroke?: number;
 }) {
   const gradId = useId().replace(/:/g, "");
-  const [now, setNow] = useState(() => Date.now());
+  const [mounted, setMounted] = useState(false);
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
+    setMounted(true);
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
 
   const { progress, text, isDue } = useMemo(() => {
+    if (!mounted || now === 0) {
+      return { progress: 0, text: "…", isDue: false };
+    }
     const target = new Date(targetIso).getTime();
     const left = target - now;
     const p = left <= 0 ? 1 : 1 - Math.min(1, left / WINDOW_MS);
@@ -44,11 +50,11 @@ export function CountdownRing({
       text: formatRemaining(left),
       isDue: left <= 0,
     };
-  }, [targetIso, now]);
+  }, [targetIso, now, mounted]);
 
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const offset = c * (1 - progress);
+  const offset = mounted ? c * (1 - progress) : c;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flexShrink: 0 }}>
