@@ -4,6 +4,7 @@ import {
   type CampaignContentMode,
   type CampaignStatus,
   type CampaignTheme,
+  Platform,
   PostStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";

@@ -8,6 +8,7 @@ import type {
   CampaignContentMode,
   CampaignStatus,
   CampaignTheme,
+  Platform,
   Prisma,
 } from "@prisma/client";
 import { Megaphone } from "lucide-react";
