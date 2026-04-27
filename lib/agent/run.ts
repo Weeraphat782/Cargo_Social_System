@@ -264,6 +264,7 @@ Social requirements (promo, NOT news rewrite):
 - Facebook: ~100-180 words, soft CTA, follow Promo guidance.
 - Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability.
+- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
 
 ${IMAGE_PROMPT_JSON_RULES}
 Ground the image in the article's title and snippet, not a generic "tech logistics" look.`;
@@ -338,6 +339,7 @@ Social requirements (promo, NOT news rewrite):
 - Facebook: ~100-180 words, soft CTA, follow Promo guidance; align with theme tone.
 - Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability and the campaign theme.
+- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
 
 ${IMAGE_PROMPT_JSON_RULES}
 The scene must come from the news article, not the theme name. Theme only influences copy tone; palette is applied at image render time.`;
@@ -408,6 +410,7 @@ Social copy:
 - Facebook: ~100-180 words, clear value + soft CTA, aligned to theme.
 - Instagram: strong hook, hashtags: 15-25, space-separated, each with #
 - LinkedIn: short paragraphs, thought leadership, under 2600 characters.
+- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
 
 OMG newsroom / site article (self-promo editorial, NOT a syndicated news piece):
 - Write an **original editorial** (400-800 words, ## markdown headings) explaining why this capability matters, how OMG approaches it, and a soft CTA. No need to reference a real breaking-news URL.
