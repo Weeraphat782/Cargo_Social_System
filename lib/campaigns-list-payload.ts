@@ -57,6 +57,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
       postsPerRun: true,
       totalPostsCap: true,
       customCron: true,
+      scheduleConfig: true,
       platforms: true,
       _count: { select: { posts: true, runs: true } },
     },
