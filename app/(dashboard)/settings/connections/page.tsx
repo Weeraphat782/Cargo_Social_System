@@ -1,9 +1,35 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Link2 } from "lucide-react";
+import { ChevronDown, Link2 } from "lucide-react";
 import { PageHeader } from "@/components/ui";
+
+type ConnectionsOverview = {
+  meta: { connected: boolean; pageIdPreview?: string; igUserIdPreview?: string };
+  linkedin: { connected: boolean; personUrnPreview?: string };
+  omg: { configured: boolean; baseHost?: string };
+};
+
+const badgeOk: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  padding: "4px 10px",
+  borderRadius: 20,
+  background: "var(--success-dim)",
+  color: "var(--success)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+};
+
+const badgeWarn: React.CSSProperties = {
+  ...badgeOk,
+  background: "var(--warning-dim)",
+  color: "var(--warning)",
+};
 
 function ConnectionCard({
   title,
@@ -16,10 +42,31 @@ function ConnectionCard({
   connected: boolean;
   children: React.ReactNode;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="omg-card is-interactive" style={{ padding: "22px 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: expanded ? 18 : 0,
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+          font: "inherit",
+          color: "inherit",
+          textAlign: "left",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 9,
             background: "var(--bg-elevated)",
@@ -31,52 +78,86 @@ function ConnectionCard({
           </div>
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>{title}</h2>
         </div>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            padding: "4px 10px",
-            borderRadius: 20,
-            background: connected ? "var(--success-dim)" : "var(--warning-dim)",
-            color: connected ? "var(--success)" : "var(--warning)",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {connected ? (
-            <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
-          ) : (
-            <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
-          )}
-          {connected ? "Connected" : "Not connected"}
-        </span>
-      </div>
-      {children}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "4px 10px",
+              borderRadius: 20,
+              background: connected ? "var(--success-dim)" : "var(--warning-dim)",
+              color: connected ? "var(--success)" : "var(--warning)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {connected ? (
+              <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
+            ) : (
+              <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
+            )}
+            {connected ? "Connected" : "Not connected"}
+          </span>
+          <ChevronDown
+            size={18}
+            strokeWidth={2}
+            aria-hidden
+            style={{
+              color: "var(--text-muted)",
+              flexShrink: 0,
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.18s ease",
+            }}
+          />
+        </div>
+      </button>
+      {expanded ? children : null}
     </div>
   );
+}
+
+function omgOverviewDetail(o: ConnectionsOverview["omg"]): string {
+  if (o.configured) {
+    return o.baseHost ? `API ${o.baseHost}` : "Endpoints ready";
+  }
+  if (o.baseHost) {
+    return `${o.baseHost} — add OMG_AGENT_TOKEN`;
+  }
+  return "Set OMG_API_BASE and OMG_AGENT_TOKEN";
 }
 
 function ConnectionsInner() {
   const sp = useSearchParams();
   const [meta, setMeta] = useState({ pageAccessToken: "", pageId: "", igUserId: "" });
   const [li, setLi] = useState({ accessToken: "", personUrn: "" });
-  const [metaOk, setMetaOk] = useState(false);
-  const [liOk, setLiOk] = useState(false);
+  const [overview, setOverview] = useState<ConnectionsOverview | null>(null);
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  useEffect(() => {
-    fetch("/api/settings/credentials/meta").then(r => r.json()).then(j => setMetaOk(!!j.connected));
-    fetch("/api/settings/credentials/linkedin").then(r => r.json()).then(j => setLiOk(!!j.connected));
+  const loadOverview = useCallback(async () => {
+    const res = await fetch("/api/settings/connections-overview");
+    if (!res.ok) return;
+    const j = (await res.json()) as ConnectionsOverview;
+    setOverview(j);
   }, []);
 
   useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  useEffect(() => {
     const l = sp.get("linkedin");
-    if (l === "ok") setMsg({ text: "LinkedIn connected successfully.", type: "success" });
+    if (l === "ok") {
+      setMsg({ text: "LinkedIn connected successfully.", type: "success" });
+      void loadOverview();
+    }
     if (l && l !== "ok") setMsg({ text: `LinkedIn OAuth error: ${l}`, type: "error" });
-  }, [sp]);
+  }, [sp, loadOverview]);
+
+  const metaOk = overview?.meta.connected ?? false;
+  const liOk = overview?.linkedin.connected ?? false;
 
   async function saveMeta(e: React.FormEvent) {
     e.preventDefault();
@@ -89,7 +170,7 @@ function ConnectionsInner() {
       ? { text: "Meta credentials saved successfully.", type: "success" }
       : { text: "Failed to save Meta credentials.", type: "error" }
     );
-    if (res.ok) setMetaOk(true);
+    if (res.ok) void loadOverview();
   }
 
   async function saveLiManual(e: React.FormEvent) {
@@ -103,7 +184,7 @@ function ConnectionsInner() {
       ? { text: "LinkedIn credentials saved.", type: "success" }
       : { text: "Failed to save LinkedIn credentials.", type: "error" }
     );
-    if (res.ok) setLiOk(true);
+    if (res.ok) void loadOverview();
   }
 
   return (
@@ -130,6 +211,80 @@ function ConnectionsInner() {
             : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           }
           {msg.text}
+        </div>
+      )}
+
+      {overview && (
+        <div className="omg-card" style={{ padding: "18px 22px", marginBottom: 16 }}>
+          <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+            Connection overview
+          </h2>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 0 }}>
+            <li
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 0",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 13, minWidth: 200 }}>Meta (Facebook &amp; Instagram)</span>
+              <span style={overview.meta.connected ? badgeOk : badgeWarn}>
+                {overview.meta.connected ? (
+                  <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
+                ) : (
+                  <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
+                )}
+                {overview.meta.connected ? "Connected" : "Not connected"}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", flex: "1 1 200px" }}>
+                {overview.meta.connected
+                  ? [overview.meta.pageIdPreview && `Page ${overview.meta.pageIdPreview}`, overview.meta.igUserIdPreview && `IG ${overview.meta.igUserIdPreview}`]
+                      .filter(Boolean)
+                      .join(" · ") || "Credentials saved"
+                  : "—"}
+              </span>
+            </li>
+            <li
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 0",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 13, minWidth: 200 }}>LinkedIn</span>
+              <span style={overview.linkedin.connected ? badgeOk : badgeWarn}>
+                {overview.linkedin.connected ? (
+                  <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
+                ) : (
+                  <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
+                )}
+                {overview.linkedin.connected ? "Connected" : "Not connected"}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", flex: "1 1 200px" }}>
+                {overview.linkedin.connected ? overview.linkedin.personUrnPreview ?? "Credentials saved" : "—"}
+              </span>
+            </li>
+            <li style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 0" }}>
+              <span style={{ fontWeight: 600, fontSize: 13, minWidth: 200 }}>OMG Cargo Website</span>
+              <span style={overview.omg.configured ? badgeOk : badgeWarn}>
+                {overview.omg.configured ? (
+                  <span className="pulse-dot pulse-dot--ok" style={{ width: 7, height: 7 }} aria-hidden />
+                ) : (
+                  <span className="pulse-dot" style={{ width: 7, height: 7 }} aria-hidden />
+                )}
+                {overview.omg.configured ? "Configured" : "Missing env"}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", flex: "1 1 200px" }}>
+                {omgOverviewDetail(overview.omg)}
+              </span>
+            </li>
+          </ul>
         </div>
       )}
 
@@ -271,38 +426,6 @@ function ConnectionsInner() {
             </div>
           </form>
         </ConnectionCard>
-
-        {/* OMG Cargo info */}
-        <div className="omg-card" style={{ padding: "22px 24px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 9,
-              background: "var(--accent-dim)", border: "1px solid var(--accent-glow)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-            </div>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>OMG Cargo Website</h2>
-            </div>
-            <span style={{
-              marginLeft: "auto", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-              background: "var(--accent-dim)", color: "var(--accent)",
-              textTransform: "uppercase", letterSpacing: "0.05em",
-            }}>
-              Auto-configured
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Posts to <span style={{ color: "var(--accent)" }}>cargo.omgexp.com</span> use the{" "}
-            <code style={{ background: "var(--bg-elevated)", padding: "1px 5px", borderRadius: 4, fontSize: 11 }}>OMG_API_URL</code> and{" "}
-            <code style={{ background: "var(--bg-elevated)", padding: "1px 5px", borderRadius: 4, fontSize: 11 }}>OMG_API_KEY</code>{" "}
-            environment variables. These are configured in your <code style={{ background: "var(--bg-elevated)", padding: "1px 5px", borderRadius: 4, fontSize: 11 }}>.env</code> file or Vercel project settings.
-          </p>
-        </div>
       </div>
     </div>
   );
