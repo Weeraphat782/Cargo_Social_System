@@ -18,6 +18,7 @@ type CampaignLoad = {
   id: string;
   status: CampaignStatus;
   name: string;
+  brandTemplateId: string;
   keywords: string;
   contentMode: CampaignFormFieldsValue["contentMode"];
   description: string | null;
@@ -46,6 +47,10 @@ export default function EditCampaignPage() {
   const [status, setStatus] = useState<CampaignStatus | null>(null);
   const [form, setForm] = useState<CampaignFormFieldsValue>(() => defaultCampaignFormFieldsValue());
   const [error, setError] = useState<string | null>(null);
+  const [brandOptions, setBrandOptions] = useState<{ id: string; displayName: string }[]>([
+    { id: "omg", displayName: "OMG" },
+    { id: "acme", displayName: "Acme (demo)" },
+  ]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,10 +71,20 @@ export default function EditCampaignPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/brands");
+      if (!res.ok) return;
+      const data = (await res.json()) as { brands?: { id: string; displayName: string }[] };
+      if (data.brands?.length) setBrandOptions(data.brands);
+    })();
+  }, []);
+
   async function save() {
     if (status === "COMPLETED") return;
     const {
       name,
+      brandTemplateId,
       keywords,
       contentMode,
       description,
@@ -97,6 +112,7 @@ export default function EditCampaignPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
+          brandTemplateId,
           keywords: keywords.trim(),
           contentMode,
           description: description.trim() || null,
@@ -190,6 +206,7 @@ export default function EditCampaignPage() {
         showAdvanced={true}
         onAdvancedOpenChange={() => {}}
         alwaysShowAdvanced
+        brandOptions={brandOptions}
       />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
         <button type="button" className="omg-btn-primary" disabled={saving} onClick={() => void save()}>

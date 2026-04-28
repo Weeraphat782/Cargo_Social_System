@@ -64,16 +64,19 @@ enum CampaignContentMode {
 }
 
 model Topic {
-  id         String   @id @default(cuid())
-  name       String
-  keywords   String
-  brandVoice String?  @db.Text
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  posts      Post[]
+  id                String   @id @default(cuid())
+  name              String
+  keywords          String
+  brandVoice        String?  @db.Text
+  /// Code registry id in lib/brands (e.g. omg, acme)
+  brandTemplateId   String   @default("omg")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  posts             Post[]
 
   @@index([createdAt(sort: Desc)])
+  @@index([brandTemplateId])
 }
 
 model NewsItem {
@@ -116,6 +119,8 @@ model Campaign {
   id            String            @id @default(cuid())
   name          String
   description   String?           @db.Text
+  /// Code registry id in lib/brands (e.g. omg, acme)
+  brandTemplateId String          @default("omg")
   status        CampaignStatus    @default(DRAFT)
   keywords      String
   brandVoice    String?           @db.Text
@@ -145,6 +150,7 @@ model Campaign {
 
   @@index([status, nextRunAt])
   @@index([updatedAt(sort: Desc)])
+  @@index([brandTemplateId])
 }
 
 model CampaignRun {
@@ -189,6 +195,19 @@ model Media {
   createdAt   DateTime    @default(now())
 
   @@index([variantId])
+}
+
+/// Editable in Settings; `slug` matches Campaign.brandTemplateId and Topic.brandTemplateId
+model BrandTemplateMaster {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  displayName String
+  payload     Json
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
 }
 
 model PlatformCredential {

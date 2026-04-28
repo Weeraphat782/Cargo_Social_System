@@ -13,6 +13,7 @@ import { fetchCampaignsListForPage } from "@/lib/campaigns-list-payload";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
 import { revalidateTag } from "next/cache";
+import { isBrandTemplateId } from "@/lib/brands/registry";
 
 const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
 
@@ -51,7 +52,17 @@ export async function POST(req: Request) {
     daysOfWeekMulti?: number[];
     specificDates?: string[];
     testDatetimes?: string[];
+    brandTemplateId?: string;
   };
+
+  let brandTemplateId = "omg";
+  if (body.brandTemplateId != null && body.brandTemplateId !== "") {
+    const tid = body.brandTemplateId.trim();
+    if (!(await isBrandTemplateId(tid))) {
+      return NextResponse.json({ error: "invalid brandTemplateId" }, { status: 400 });
+    }
+    brandTemplateId = tid;
+  }
 
   if (!body.name?.trim()) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -162,6 +173,7 @@ export async function POST(req: Request) {
   const c = await prisma.campaign.create({
     data: {
       name: body.name.trim(),
+      brandTemplateId,
       description: body.description?.trim() || null,
       status,
       keywords: keywordsTrim,

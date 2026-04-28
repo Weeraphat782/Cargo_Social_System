@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { isBrandTemplateId } from "@/lib/brands/registry";
 
 export async function PATCH(
   req: Request,
@@ -15,11 +16,23 @@ export async function PATCH(
     keywords?: string;
     brandVoice?: string | null;
     active?: boolean;
+    brandTemplateId?: string;
   };
+
+  if (body.brandTemplateId != null) {
+    if (!(await isBrandTemplateId(body.brandTemplateId.trim()))) {
+      return NextResponse.json({ error: "invalid brandTemplateId" }, { status: 400 });
+    }
+  }
+
+  const data = { ...body };
+  if (body.brandTemplateId != null) {
+    data.brandTemplateId = body.brandTemplateId.trim();
+  }
 
   const t = await prisma.topic.update({
     where: { id },
-    data: body,
+    data,
   });
 
   return NextResponse.json(t);

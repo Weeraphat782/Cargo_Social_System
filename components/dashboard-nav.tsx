@@ -82,6 +82,16 @@ const workspaceNav: {
 
 const settingsNav: { href: string; label: string; icon: React.ReactNode }[] = [
   {
+    href: "/settings/brand-masters",
+    label: "Brand master",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+    ),
+  },
+  {
     href: "/settings/connections",
     label: "Connections",
     icon: (
@@ -96,7 +106,6 @@ const settingsNav: { href: string; label: string; icon: React.ReactNode }[] = [
 function isNavActive(href: string, pathname: string) {
   if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
   if (href === "/campaigns") return pathname.startsWith("/campaigns");
-  if (href === "/settings/connections") return pathname.startsWith("/settings");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

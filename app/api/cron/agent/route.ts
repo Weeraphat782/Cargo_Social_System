@@ -10,18 +10,19 @@ export async function GET(req: NextRequest) {
   try {
     assertCronSecret(req);
     const env = getServerEnv();
-    const budget = env.CONTENT_BUDGET_PER_DAY ?? 3;
 
-    const topics = await prisma.topic.findMany({ where: { active: true } });
     const created: string[] = [];
-
-    for (const t of topics) {
-      if (created.length >= budget) break;
-      try {
-        const { postId } = await runAgentForTopic(t.id);
-        created.push(postId);
-      } catch (e) {
-        console.error(`Agent failed for topic ${t.id}`, e);
+    if (env.CRON_TOPIC_AGENT_ENABLED) {
+      const budget = env.CONTENT_BUDGET_PER_DAY ?? 3;
+      const topics = await prisma.topic.findMany({ where: { active: true } });
+      for (const t of topics) {
+        if (created.length >= budget) break;
+        try {
+          const { postId } = await runAgentForTopic(t.id);
+          created.push(postId);
+        } catch (e) {
+          console.error(`Agent failed for topic ${t.id}`, e);
+        }
       }
     }
 
@@ -33,7 +34,12 @@ export async function GET(req: NextRequest) {
       console.error("runDueCampaigns failed:", e);
     }
 
-    return NextResponse.json({ ok: true, created, campaignRuns });
+    return NextResponse.json({
+      ok: true,
+      created,
+      campaignRuns,
+      topicAgentRan: env.CRON_TOPIC_AGENT_ENABLED,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 500 });

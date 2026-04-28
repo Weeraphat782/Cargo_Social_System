@@ -17,8 +17,14 @@ import { requireEnv } from "@/lib/env";
 import { searchNews, searchNewsWithGemini, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
 import { withGeminiRetry } from "@/lib/gemini-retry";
-import { OMG_SERVICES, PROMO_GUIDANCE } from "@/lib/agent/promo-config";
-import { getThemeBundle, type ThemeBundle } from "@/lib/agent/themes";
+import {
+  buildCampaignNewsDraftPrompt,
+  buildCampaignSelfPromoDraftPrompt,
+  buildTopicNewsDraftPrompt,
+} from "@/lib/brands/build-prompts";
+import { getBrandTemplateOrDefault, getThemeBundleForBrand } from "@/lib/brands/registry";
+import type { BrandPromptTemplate } from "@/lib/brands/types";
+import type { ThemeBundle } from "@/lib/agent/themes";
 
 const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash";
 
@@ -210,64 +216,36 @@ function applyOmgSourceFields(
   }
 }
 
-/** SELF_PROMO: OMG page is brand editorial, not a syndicated news article. */
-function applyOmgSelfPromoSourceFields(draft: DraftJson): void {
-  const title = "Original brand content (OMG Experience)";
+/** SELF_PROMO: brand editorial, not a syndicated news article. */
+function applySelfPromoSourceFields(draft: DraftJson, template: BrandPromptTemplate): void {
   const url =
-    process.env.NEXT_PUBLIC_OMG_SITE_URL ||
-    process.env.OMG_PUBLIC_URL ||
-    "https://www.omg.experience";
-  draft.omg.sourceTitle = title;
+    template.id === "omg"
+      ? process.env.NEXT_PUBLIC_OMG_SITE_URL ||
+        process.env.OMG_PUBLIC_URL ||
+        template.selfPromo.fallbackPublicUrl
+      : template.selfPromo.fallbackPublicUrl;
+  draft.omg.sourceTitle = template.selfPromo.defaultSourceTitle;
   draft.omg.sourceUrl = url;
-  if (!draft.omg.bodyMd.includes("Original brand content — OMG Experience")) {
-    const line = `> *Original brand content — OMG Experience.*`;
-    draft.omg.bodyMd = `${draft.omg.bodyMd.trimEnd()}\n\n${line}\n`;
+  if (!draft.omg.bodyMd.includes(template.selfPromo.contentMarker)) {
+    draft.omg.bodyMd = `${draft.omg.bodyMd.trimEnd()}\n\n${template.selfPromo.citationLine}\n`;
   }
 }
 
-export async function draftWithGemini(input: {
-  topicName: string;
-  brandVoice?: string | null;
-  newsTitle: string;
-  newsUrl: string;
-  newsSnippet: string;
-}): Promise<DraftJson> {
-  const servicesCatalog = OMG_SERVICES.map(
-    (s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`
-  ).join("\n");
-
-  const prompt = `You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.
-
-Topic: ${input.topicName}
-Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-
-Source article (for OMG newsroom only — do NOT paraphrase on social):
-Title: ${input.newsTitle}
-URL: ${input.newsUrl}
-Snippet: ${input.newsSnippet}
-
-OMG services catalog (for Facebook / Instagram / LinkedIn promo):
-${servicesCatalog}
-
-Promo guidance:
-${PROMO_GUIDANCE}
-
-OMG newsroom requirements:
-- Write an original news-style article (500-900 words, ## headings, markdown).
-- Lead with what happened and why it matters for logistics / supply chain.
-- Attribute facts clearly; do not fabricate figures.
-- Set JSON fields sourceTitle and sourceUrl to the source article title and URL above verbatim.
-- End bodyMd with a final line exactly: > Source: [sourceTitle](sourceUrl) using the same title and URL as above.
-- slug must be unique kebab-case.
-
-Social requirements (promo, NOT news rewrite):
-- Facebook: ~100-180 words, soft CTA, follow Promo guidance.
-- Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
-- LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability.
-- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
-
-${IMAGE_PROMPT_JSON_RULES}
-Ground the image in the article's title and snippet, not a generic "tech logistics" look.`;
+export async function draftWithGemini(
+  input: {
+    topicName: string;
+    brandVoice?: string | null;
+    newsTitle: string;
+    newsUrl: string;
+    newsSnippet: string;
+  },
+  template: BrandPromptTemplate
+): Promise<DraftJson> {
+  const prompt = buildTopicNewsDraftPrompt(
+    template,
+    input,
+    IMAGE_PROMPT_JSON_RULES
+  );
 
   const ai = getGenAI();
   const response = await withGeminiRetry("draftWithGemini", () =>
@@ -293,56 +271,22 @@ Ground the image in the article's title and snippet, not a generic "tech logisti
   return parsed;
 }
 
-export async function draftWithGeminiForCampaign(input: {
-  campaignName: string;
-  brandVoice?: string | null;
-  newsTitle: string;
-  newsUrl: string;
-  newsSnippet: string;
-  theme: ThemeBundle;
-}): Promise<DraftJson> {
-  const servicesCatalog = OMG_SERVICES.map(
-    (s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`
-  ).join("\n");
-
-  const prompt = `You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.
-
-CAMPAIGN (theme-driven automation): ${input.campaignName}
-Theme: ${input.theme.label}
-Theme angle: ${input.theme.angle}
-Theme tone: ${input.theme.tone}
-Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use OMG services catalog to stay factual.
-Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-
-Source article (for OMG newsroom only — do NOT paraphrase on social):
-Title: ${input.newsTitle}
-URL: ${input.newsUrl}
-Snippet: ${input.newsSnippet}
-
-OMG services catalog (for Facebook / Instagram / LinkedIn promo):
-${servicesCatalog}
-
-Promo guidance:
-${PROMO_GUIDANCE}
-
-Theme palette (for final image only — will be added at render time, NOT inside imagePrompt): ${input.theme.visualStyleNotes}
-
-OMG newsroom requirements:
-- Write an original news-style article (500-900 words, ## headings, markdown).
-- Lead with what happened and why it matters for logistics / supply chain.
-- Attribute facts clearly; do not fabricate figures.
-- Set JSON fields sourceTitle and sourceUrl to the source article title and URL above verbatim.
-- End bodyMd with a final line exactly: > Source: [sourceTitle](sourceUrl) using the same title and URL as above.
-- slug must be unique kebab-case.
-
-Social requirements (promo, NOT news rewrite):
-- Facebook: ~100-180 words, soft CTA, follow Promo guidance; align with theme tone.
-- Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
-- LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around OMG capability and the campaign theme.
-- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
-
-${IMAGE_PROMPT_JSON_RULES}
-The scene must come from the news article, not the theme name. Theme only influences copy tone; palette is applied at image render time.`;
+export async function draftWithGeminiForCampaign(
+  input: {
+    campaignName: string;
+    brandVoice?: string | null;
+    newsTitle: string;
+    newsUrl: string;
+    newsSnippet: string;
+    theme: ThemeBundle;
+  },
+  template: BrandPromptTemplate
+): Promise<DraftJson> {
+  const prompt = buildCampaignNewsDraftPrompt(
+    template,
+    input,
+    IMAGE_PROMPT_JSON_RULES
+  );
 
   const ai = getGenAI();
   const response = await withGeminiRetry("draftWithGeminiForCampaign", () =>
@@ -368,57 +312,22 @@ The scene must come from the news article, not the theme name. Theme only influe
   return parsed;
 }
 
-export async function draftWithGeminiForPromoCampaign(input: {
-  campaignName: string;
-  description?: string | null;
-  brandVoice?: string | null;
-  /** Themes / services to highlight; may be empty (we still use campaign name) */
-  highlightKeywords: string;
-  theme: ThemeBundle;
-}): Promise<DraftJson> {
-  const servicesCatalog = OMG_SERVICES.map(
-    (s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`
-  ).join("\n");
-
-  const focus =
-    input.highlightKeywords.trim() ||
-    "General OMG value proposition; pick the most relevant OMG services below.";
-
-  const prompt = `You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.
-
-CAMPAIGN (SELF-PROMO — no external news required): ${input.campaignName}
-${input.description ? `Description: ${input.description}` : ""}
-Themes / services to lean into: ${focus}
-
-Theme (visual + voice package): ${input.theme.label}
-Theme angle: ${input.theme.angle}
-Theme tone: ${input.theme.tone}
-Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other OMG services from the catalog.
-Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-
-This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
-
-OMG services catalog:
-${servicesCatalog}
-
-Promo guidance (social):
-${PROMO_GUIDANCE}
-
-Theme palette (for final image only — not duplicated inside the imagePrompt object): ${input.theme.visualStyleNotes}
-
-Social copy:
-- Facebook: ~100-180 words, clear value + soft CTA, aligned to theme.
-- Instagram: strong hook, hashtags: 15-25, space-separated, each with #
-- LinkedIn: short paragraphs, thought leadership, under 2600 characters.
-- Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: https://cargo.omgexp.com/site
-
-OMG newsroom / site article (self-promo editorial, NOT a syndicated news piece):
-- Write an **original editorial** (400-800 words, ## markdown headings) explaining why this capability matters, how OMG approaches it, and a soft CTA. No need to reference a real breaking-news URL.
-- Do NOT add a "Source: [external URL]" line for a news site — the article is OMG-originated.
-- slug: kebab-case, unique for this piece.
-
-${IMAGE_PROMPT_JSON_RULES}
-For SELF-PROMO (no news article), base imagePrompt.subject and keyElements on the campaign name, description, and highlight keywords, plus the most relevant OMG service concepts — still avoid empty clichés like "dashboard" or "cold box" unless the copy truly demands it.`;
+export async function draftWithGeminiForPromoCampaign(
+  input: {
+    campaignName: string;
+    description?: string | null;
+    brandVoice?: string | null;
+    /** Themes / services to highlight; may be empty (we still use campaign name) */
+    highlightKeywords: string;
+    theme: ThemeBundle;
+  },
+  template: BrandPromptTemplate
+): Promise<DraftJson> {
+  const prompt = buildCampaignSelfPromoDraftPrompt(
+    template,
+    input,
+    IMAGE_PROMPT_JSON_RULES
+  );
 
   const ai = getGenAI();
   const response = await withGeminiRetry("draftWithGeminiForPromoCampaign", () =>
@@ -437,7 +346,7 @@ For SELF-PROMO (no news article), base imagePrompt.subject and keyElements on th
 
   const parsed = JSON.parse(text) as DraftJson;
   parsed.imagePrompt = normalizeImagePrompt(parsed.imagePrompt);
-  applyOmgSelfPromoSourceFields(parsed);
+  applySelfPromoSourceFields(parsed, template);
   return parsed;
 }
 
@@ -536,7 +445,8 @@ export async function runAgentForCampaign(
     }
   }
 
-  const theme = getThemeBundle(campaign.theme);
+  const template = await getBrandTemplateOrDefault(campaign.brandTemplateId);
+  const theme = await getThemeBundleForBrand(campaign.brandTemplateId, campaign.theme);
   const platformList: Platform[] =
     campaign.platforms.length > 0
       ? (campaign.platforms as Platform[])
@@ -567,13 +477,16 @@ export async function runAgentForCampaign(
     let sourceNewsId: string | null = null;
 
     if (selfPromo) {
-      draft = await draftWithGeminiForPromoCampaign({
-        campaignName: campaign.name,
-        description: campaign.description,
-        brandVoice: campaign.brandVoice,
-        highlightKeywords: campaign.keywords,
-        theme,
-      });
+      draft = await draftWithGeminiForPromoCampaign(
+        {
+          campaignName: campaign.name,
+          description: campaign.description,
+          brandVoice: campaign.brandVoice,
+          highlightKeywords: campaign.keywords,
+          theme,
+        },
+        template
+      );
     } else {
       const top = results[i] ?? results[0];
       if (!top) break;
@@ -582,14 +495,17 @@ export async function runAgentForCampaign(
         throw new Error("NewsItem missing after search");
       }
       sourceNewsId = newsRow.id;
-      draft = await draftWithGeminiForCampaign({
-        campaignName: campaign.name,
-        brandVoice: campaign.brandVoice,
-        newsTitle: top.title,
-        newsUrl: top.link,
-        newsSnippet: top.snippet,
-        theme,
-      });
+      draft = await draftWithGeminiForCampaign(
+        {
+          campaignName: campaign.name,
+          brandVoice: campaign.brandVoice,
+          newsTitle: top.title,
+          newsUrl: top.link,
+          newsSnippet: top.snippet,
+          theme,
+        },
+        template
+      );
     }
 
     const newsForImage: { title: string; snippet?: string } = selfPromo
@@ -737,13 +653,17 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
   });
   if (!newsRow) throw new Error("NewsItem missing after search");
 
-  const draft = await draftWithGemini({
-    topicName: topic.name,
-    brandVoice: topic.brandVoice,
-    newsTitle: top.title,
-    newsUrl: top.link,
-    newsSnippet: top.snippet,
-  });
+  const topicTemplate = await getBrandTemplateOrDefault(topic.brandTemplateId);
+  const draft = await draftWithGemini(
+    {
+      topicName: topic.name,
+      brandVoice: topic.brandVoice,
+      newsTitle: top.title,
+      newsUrl: top.link,
+      newsSnippet: top.snippet,
+    },
+    topicTemplate
+  );
 
   const imageBrief = composeImageBrief(draft.imagePrompt, {
     paletteHint: DEFAULT_NEUTRAL_PALETTE,

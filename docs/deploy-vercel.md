@@ -41,12 +41,13 @@ If build fails with P3005 or migration history issues, see `.env.example` and co
 ### Cron security
 
 - `CRON_SECRET` — random string; required for `curl` / external triggers without Vercel’s cron header.
+- `CRON_TOPIC_AGENT_ENABLED` — omit or `false` so `/api/cron/tick` only publishes due posts and runs **campaigns**. Set `true` only if you still want the legacy Topic agent (creates posts tied to topics, not campaigns). Default off avoids extra posts from cron.
 
 ### AI & news
 
 - `GEMINI_API_KEY`
 - `GOOGLE_CSE_API_KEY`, `GOOGLE_CSE_ID` (recommended for news URLs)
-- `CONTENT_BUDGET_PER_DAY=3` (or your cap)
+- `CONTENT_BUDGET_PER_DAY=3` — cap used when the Topic agent cron is enabled (see above).
 
 ### Token encryption (platform credentials in DB)
 

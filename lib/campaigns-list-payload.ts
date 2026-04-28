@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   type CampaignCadence,
   type CampaignContentMode,
@@ -9,9 +9,25 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
+/**
+ * Fetches brandTemplateId without going through the typed findMany `select` path.
+ * If Prisma Client was generated from an older schema, `select: { brandTemplateId: true }`
+ * throws; the column still exists in PostgreSQL after migrate, so we read it via raw SQL.
+ */
+async function getCampaignBrandTemplateIds(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (ids.length === 0) return map;
+  const raw = await prisma.$queryRaw<Array<{ id: string; brandTemplateId: string }>>(
+    Prisma.sql`SELECT "id", "brandTemplateId"::text AS "brandTemplateId" FROM "Campaign" WHERE "id" IN (${Prisma.join(ids)})`
+  );
+  for (const row of raw) map.set(row.id, row.brandTemplateId);
+  return map;
+}
+
 export type CampaignListRowJson = {
   id: string;
   name: string;
+  brandTemplateId: string;
   status: CampaignStatus;
   theme: CampaignTheme;
   contentMode: CampaignContentMode;
@@ -63,6 +79,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
     },
   });
   const ids = rows.map((r) => r.id);
+  const brandById = await getCampaignBrandTemplateIds(ids);
   const publishedGroups =
     ids.length > 0
       ? await prisma.post.groupBy({
@@ -75,6 +92,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
   return rows.map((c) => ({
     id: c.id,
     name: c.name,
+    brandTemplateId: brandById.get(c.id) ?? "omg",
     status: c.status,
     theme: c.theme,
     contentMode: c.contentMode,

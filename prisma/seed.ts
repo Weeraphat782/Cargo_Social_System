@@ -1,8 +1,23 @@
 import { PrismaClient } from "@prisma/client";
+import { omgTemplate } from "../lib/brands/templates/omg";
+import { templateToJsonPayload } from "../lib/brands/payload-schema";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const omgRow = await prisma.brandTemplateMaster.findUnique({ where: { slug: "omg" } });
+  if (!omgRow) {
+    await prisma.brandTemplateMaster.create({
+      data: {
+        slug: "omg",
+        displayName: omgTemplate.displayName,
+        payload: templateToJsonPayload(omgTemplate) as object,
+        isSystem: true,
+      },
+    });
+    console.log("Seeded Brand master: OMG (from hardcoded template).");
+  }
+
   const count = await prisma.topic.count();
   if (count > 0) {
     console.log("Topics already exist, skipping seed.");

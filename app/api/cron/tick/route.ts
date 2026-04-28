@@ -22,27 +22,30 @@ export async function GET(req: NextRequest) {
     // 2. Run Campaign Scheduler (Agent Drafting)
     const { processed: campaignRuns } = await runDueCampaigns();
 
-    // 3. Legacy Topic-based Agent
-    const budget = env.CONTENT_BUDGET_PER_DAY ?? 3;
-    const topics = await prisma.topic.findMany({ where: { active: true } });
+    // 3. Legacy Topic-based Agent (opt-in — creates posts without campaignId when enabled)
     const topicPosts: string[] = [];
-    for (const t of topics) {
-      if (topicPosts.length >= budget) break;
-      try {
-        const { postId } = await runAgentForTopic(t.id);
-        topicPosts.push(postId);
-      } catch (e) {
-        console.error(`Agent failed for topic ${t.id}`, e);
+    if (env.CRON_TOPIC_AGENT_ENABLED) {
+      const budget = env.CONTENT_BUDGET_PER_DAY ?? 3;
+      const topics = await prisma.topic.findMany({ where: { active: true } });
+      for (const t of topics) {
+        if (topicPosts.length >= budget) break;
+        try {
+          const { postId } = await runAgentForTopic(t.id);
+          topicPosts.push(postId);
+        } catch (e) {
+          console.error(`Agent failed for topic ${t.id}`, e);
+        }
       }
     }
 
-    return NextResponse.json({ 
-      ok: true, 
+    return NextResponse.json({
+      ok: true,
       publishedCount: published.length,
       draftsCreated: campaignRuns.length + topicPosts.length,
       published,
       campaignRuns,
-      topicPosts
+      topicPosts,
+      topicAgentRan: env.CRON_TOPIC_AGENT_ENABLED,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";

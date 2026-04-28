@@ -13,6 +13,7 @@ import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
 import { parseScheduleConfig, toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
 import type { CampaignCadence, CampaignTheme } from "@prisma/client";
+import { isBrandTemplateId } from "@/lib/brands/registry";
 
 const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
 
@@ -40,6 +41,7 @@ type PatchBody = {
   specificDates?: string[];
   testDatetimes?: string[];
   scheduleConfig?: Prisma.JsonValue | null;
+  brandTemplateId?: string;
 };
 
 export async function GET(
@@ -151,6 +153,12 @@ export async function PATCH(
     u.contentMode = body.contentMode;
   }
   if (body.brandVoice !== undefined) u.brandVoice = body.brandVoice;
+  if (body.brandTemplateId != null) {
+    if (!(await isBrandTemplateId(body.brandTemplateId.trim()))) {
+      return NextResponse.json({ error: "invalid brandTemplateId" }, { status: 400 });
+    }
+    u.brandTemplateId = body.brandTemplateId.trim();
+  }
   if (body.theme != null) u.theme = body.theme;
   if (body.cadence != null) u.cadence = body.cadence;
   if (body.dayOfWeek !== undefined) u.dayOfWeek = body.dayOfWeek;

@@ -20,6 +20,8 @@ export const PLATFORM_OPTIONS: { v: Platform; label: string }[] = [
 
 export type CampaignFormFieldsValue = {
   name: string;
+  /** Registry id: omg, acme, etc. */
+  brandTemplateId: string;
   contentMode: CampaignContentMode;
   keywords: string;
   description: string;
@@ -44,11 +46,13 @@ type Props = {
   onAdvancedOpenChange: (open: boolean) => void;
   /** When true, advanced fields are always shown (no collapsible details) */
   alwaysShowAdvanced?: boolean;
+  brandOptions: { id: string; displayName: string }[];
 };
 
 export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
   return {
     name: "",
+    brandTemplateId: "omg",
     keywords: "",
     contentMode: "NEWS_DRIVEN",
     description: "",
@@ -85,6 +89,7 @@ export function campaignToFormFieldsValue(
     | "totalPostsCap"
     | "autoApprove"
     | "publishHourOfDay"
+    | "brandTemplateId"
   > & { endAt?: string | Date | null }
 ): CampaignFormFieldsValue {
   const base = defaultScheduleValue();
@@ -107,6 +112,7 @@ export function campaignToFormFieldsValue(
 
   return {
     name: c.name,
+    brandTemplateId: c.brandTemplateId ?? "omg",
     keywords: c.keywords,
     contentMode: c.contentMode,
     description: c.description ?? "",
@@ -147,8 +153,9 @@ export function CampaignFormFields({
   showAdvanced,
   onAdvancedOpenChange,
   alwaysShowAdvanced = false,
+  brandOptions,
 }: Props) {
-  const { name, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove, publishHourOfDay } = value;
+  const { name, brandTemplateId, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove, publishHourOfDay } = value;
 
   const advancedBlock = (
     <div style={{ display: "grid", gap: 12 }}>
@@ -255,6 +262,20 @@ export function CampaignFormFields({
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
         Campaign name
         <input className="omg-input" value={name} onChange={(e) => onChange({ name: e.target.value })} />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 320 }}>
+        Brand template
+        <select
+          className="omg-input"
+          value={brandTemplateId}
+          onChange={(e) => onChange({ brandTemplateId: e.target.value })}
+        >
+          {brandOptions.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.displayName}
+            </option>
+          ))}
+        </select>
       </label>
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Content mode</div>

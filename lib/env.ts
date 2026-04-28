@@ -28,6 +28,14 @@ const serverSchema = z.object({
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  /**
+   * When "true", cron routes run the legacy topic agent (posts linked to Topic only, not Campaign).
+   * Defaults off — external cron-org ticks otherwise create extra posts beside scheduled campaigns.
+   */
+  CRON_TOPIC_AGENT_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
   CONTENT_BUDGET_PER_DAY: z.coerce.number().min(1).max(20).default(3),
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
@@ -40,6 +40,7 @@ type SuggestedCampaign = {
 type CampaignRow = {
   id: string;
   name: string;
+  brandTemplateId: string;
   status: CampaignStatus;
   theme: CampaignTheme;
   contentMode: CampaignContentMode;
@@ -84,6 +85,11 @@ const DOW: { v: number; label: string }[] = [
   { v: 6, label: "Sat" },
 ];
 
+const DEFAULT_BRAND_OPTIONS: { id: string; displayName: string }[] = [
+  { id: "omg", displayName: "OMG" },
+  { id: "acme", displayName: "Acme (demo)" },
+];
+
 const overlayStyle: CSSProperties = {
   position: "fixed",
   inset: 0,
@@ -120,6 +126,16 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
   const [manualForm, setManualForm] = useState<CampaignFormFieldsValue>(() => defaultCampaignFormFieldsValue());
   const [aiThemePitch, setAiThemePitch] = useState<string | null>(null);
   const [aiAdvancedOpen, setAiAdvancedOpen] = useState(true);
+  const [brandOptions, setBrandOptions] = useState<{ id: string; displayName: string }[]>(DEFAULT_BRAND_OPTIONS);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/brands");
+      if (!res.ok) return;
+      const data = (await res.json()) as { brands?: { id: string; displayName: string }[] };
+      if (data.brands?.length) setBrandOptions(data.brands);
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,7 +153,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       const res = await fetch("/api/campaigns/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hint: hint || undefined }),
+        body: JSON.stringify({ hint: hint || undefined, brandTemplateId: manualForm.brandTemplateId }),
       });
       const data = (await res.json()) as { campaigns?: SuggestedCampaign[]; error?: string };
       if (!res.ok) {
@@ -168,6 +184,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
   async function createFromPayload(status: CampaignStatus) {
     const {
       name,
+      brandTemplateId,
       keywords,
       contentMode,
       description,
@@ -188,6 +205,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
+          brandTemplateId,
           keywords: keywords.trim(),
           contentMode,
           description: description.trim() || undefined,
@@ -244,6 +262,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
     });
     setAiDraft({
       name: s.name,
+      brandTemplateId: manualForm.brandTemplateId,
       contentMode: s.contentMode ?? "NEWS_DRIVEN",
       keywords: s.keywords,
       description: s.description,
@@ -268,6 +287,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: draft.name.trim(),
+          brandTemplateId: draft.brandTemplateId,
           keywords: draft.keywords.trim(),
           contentMode: draft.contentMode,
           description: draft.description.trim() || undefined,
@@ -456,6 +476,31 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                 ← Back
               </button>
             </div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                marginBottom: 10,
+                color: "var(--text-secondary)",
+                maxWidth: 320,
+              }}
+            >
+              Brand template
+              <select
+                className="omg-input"
+                style={{ display: "block", width: "100%", marginTop: 4 }}
+                value={manualForm.brandTemplateId}
+                onChange={(e) =>
+                  setManualForm((prev) => ({ ...prev, brandTemplateId: e.target.value }))
+                }
+              >
+                {brandOptions.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label style={{ display: "block", fontSize: 12, marginBottom: 6, color: "var(--text-secondary)" }}>
               Your prompt for the AI
               <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>
@@ -610,6 +655,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                 layout="manual"
                 showAdvanced={showAdvanced}
                 onAdvancedOpenChange={setShowAdvanced}
+                brandOptions={brandOptions}
               />
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -675,6 +721,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                 layout="ai"
                 showAdvanced={aiAdvancedOpen}
                 onAdvancedOpenChange={setAiAdvancedOpen}
+                brandOptions={brandOptions}
               />
             </div>
 
@@ -766,8 +813,8 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                 >
                   <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    {c.status} · {c.contentMode === "SELF_PROMO" ? "self-promo" : "news"} · {c.cadence} ·{" "}
-                    {c.theme}
+                    {c.status} · {c.brandTemplateId} · {c.contentMode === "SELF_PROMO" ? "self-promo" : "news"} ·{" "}
+                    {c.cadence} · {c.theme}
                     {c.publishHourOfDay != null && ` · pub: ${c.publishHourOfDay}:00`}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 4 }}>

@@ -1,0 +1,88 @@
+{
+  "id": "cantrak",
+  "displayName": "Cantrak",
+  "strategistTagline": "You are a social media strategist for Cantrak (ServiceMind Asia) — Thailand seed-to-sale cannabis & hemp software: อย. compliance reporting, full-chain traceability, inventory, harvest, production, and e-commerce for licensed operators.",
+  "orgShort": "Cantrak",
+  "orgDisplayName": "Cantrak",
+  "sourceArticleSiteLabel": "for Cantrak / Thai cannabis industry news only",
+  "servicesCatalogHeading": "Cantrak product pillars (for Facebook / Instagram / LinkedIn — B2B licensed operators, Thailand):",
+  "newsroomRequirementsHeading": "Cantrak / cannabis compliance content requirements (Thailand):",
+  "industryContext": "legal cannabis & hemp (Thailand), regulatory tech, seed-to-sale, อย. reporting",
+  "services": [
+    {
+      "name": "อย. & compliance reporting",
+      "tags": ["อย", "fda", "บัญชีรับจ่าย", "พรบ 2562", "รายงาน", "thailand"],
+      "pitch": "Monthly and annual reporting aligned with อย. information systems, reducing the burden of narcotics account rules for licensed importers, producers, and sellers."
+    },
+    {
+      "name": "Seed-to-sale traceability",
+      "tags": ["traceability", "lot", "plant id", "seed to sale", "กัญชา", "กัญชง"],
+      "pitch": "Plant IDs, propagation numbers, and lot tracking from seed through cultivation and sale — defensible, auditable chain of custody for Thai operators."
+    },
+    {
+      "name": "Inventory, harvest & waste",
+      "tags": ["inventory", "waste", "harvest", "stock", "flower", "leaf", "root", "กองเก็บ"],
+      "pitch": "Manage stock and waste through every growth stage, classify product types (leaf, flower, root, seed) for sale or as feedstock for processing."
+    },
+    {
+      "name": "Production & platform modules",
+      "tags": ["production", "e-commerce", "daily tasks", "operations", "b2b"],
+      "pitch": "End-to-end workflows including daily operations, production, and commercial channels on one platform — so teams focus on growing the business, not paperwork."
+    }
+  ],
+  "promoGuidance": "Cantrak self-promotion rules for Facebook / Instagram / LinkedIn (Thailand B2B, licensed sector):\n- Do NOT rewrite or summarize a news article at length. Use the headline only as a short hook, then pivot to how licensed operators can stay compliant or operate more safely with modern software.\n- Pick the ONE product pillar from the services catalog that best matches the story; default to \"อย. & compliance reporting\" for regulatory news, \"Seed-to-sale traceability\" for supply-chain or quality stories.\n- Emphasize legal compliance, traceability, and reducing อย. reporting burden. Never promote personal consumption, medical claims, or unlicensed activity.\n- End with a soft CTA: demo, contact, or visit the site. No long quotes from the source. No false FDA/government endorsements.\n- Tone: professional, calm, operationally precise — for growers, producers, and distributors, not end consumers of cannabis products for intoxication.",
+  "mandatoryCtaUrl": "https://cantrak.tech/th/index.html",
+  "selfPromo": {
+    "defaultSourceTitle": "Original brand content (Cantrak)",
+    "contentMarker": "Original brand content — Cantrak (ServiceMind Asia)",
+    "citationLine": "> *Original brand content — Cantrak.*",
+    "fallbackPublicUrl": "https://cantrak.tech/th/index.html"
+  },
+  "selfPromoEditorialNoExternalSource": "Cantrak editorial (self-promo, NOT a third-party news article about cannabis products for intoxication):\n- Write an **original editorial** (400–800 words, ## markdown) on why traceability, อย. reporting, and seed-to-sale discipline matter for Thailand’s legal cannabis economy, and how software reduces operational risk. Soft CTA to contact or request a demo.\n- No \"Source: [external site]\" for general news; this piece is Cantrak-originated. Slug: kebab-case, unique. Avoid medical/therapeutic claims; stay B2B and compliance-oriented.",
+  "selfPromoGeneralValueProposition": "General Cantrak value: compliance-first, seed-to-sale visibility, and less time on paperwork for Thai licensed operators — pick the most relevant product pillar from the list below.",
+  "suggestCampaign": {
+    "plannerBrief": "Cantrak — B2B seed-to-sale cannabis/hemp software in Thailand; audience: licensed growers, processors, distributors; focus on อย. compliance, traceability, inventory/harvest, production; tone: professional Thai/English; avoid consumer intoxication use-cases. Contact: contact@cantrak.tech, 094-660-8854.",
+    "plannerRoleLine": "You are a B2B social and campaign planner for Cantrak, a Thailand-focused cannabis business software (ServiceMind Asia).",
+    "orgShort": "Cantrak",
+    "forbiddenNameSubstrings": [
+      "อย. & compliance reporting",
+      "seed-to-sale traceability",
+      "production & platform modules",
+      "reliability & compliance",
+      "innovation & visibility",
+      "speed & time-critical"
+    ]
+  },
+  "themeBundles": {
+    "RELIABILITY_PRO": {
+      "id": "RELIABILITY_PRO",
+      "label": "Reliability & compliance",
+      "leadServiceName": "อย. & compliance reporting",
+      "tone": "Calm, audit-minded, law-aware. Emphasize อย. systems, valid reporting, and duty-of-care to regulations — never hype.",
+      "angle": "Frame every story as risk reduction: correct monthly/annual accounts, defensible records, and peace of mind for license holders in Thailand’s regulated environment.",
+      "visualStyleNotes": "Deep green and slate neutrals, clean UI-adjacent imagery, subtle plant silhouettes, no product glamour shots; serious B2B mood.",
+      "referenceCategory": "cannabis compliance software UI / Thai regulatory / seed-to-shelf workflow",
+      "thumbnailPath": ""
+    },
+    "INNOVATION_TECH": {
+      "id": "INNOVATION_TECH",
+      "label": "Innovation & traceability",
+      "leadServiceName": "Seed-to-sale traceability",
+      "tone": "Clear, system-oriented, product-led. Emphasize Plant ID, lot integrity, and data that survives an audit or recall scenario.",
+      "angle": "Connect industry news to the need for digital traceability from seed to sale — not hype, but operational truth and one source of data.",
+      "visualStyleNotes": "Teal and forest green on white, line icons, dashboard-adjacent composition; modern SaaS, not party lifestyle.",
+      "referenceCategory": "agtech traceability, greenhouse ops dashboards, lot labels",
+      "thumbnailPath": ""
+    },
+    "SPEED_URGENCY": {
+      "id": "SPEED_URGENCY",
+      "label": "Operations & time-to-market",
+      "leadServiceName": "Inventory, harvest & waste",
+      "tone": "Decisive, harvest-season aware, practical. Emphasize classifying product types, waste handling, and not losing value at the shedoor.",
+      "angle": "Tie headlines to the pace of the grow cycle, harvest windows, and the cost of bad inventory or misclassified material — with software keeping teams aligned under pressure.",
+      "visualStyleNotes": "Amber/earth accents on warm neutrals, golden-hour agricultural lighting, professional and grounded — not recreational cannabis glam.",
+      "referenceCategory": "post-harvest processing, labelling, clean facility workflow",
+      "thumbnailPath": ""
+    }
+  }
+}
