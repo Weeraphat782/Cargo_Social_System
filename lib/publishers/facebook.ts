@@ -1,3 +1,4 @@
+import { formatGraphPublishError, type GraphApiErrorJson } from "./graph-api-errors";
 import type { PublishInput, PublishResult } from "./types";
 
 /**
@@ -15,9 +16,9 @@ export async function publishFacebookPage(
   url.searchParams.set("url", input.imageUrl);
 
   const res = await fetch(url.toString(), { method: "POST" });
-  const json = (await res.json()) as { id?: string; error?: { message: string } };
+  const json = (await res.json()) as GraphApiErrorJson;
   if (!res.ok || !json.id) {
-    throw new Error(json.error?.message ?? `Facebook error ${res.status}`);
+    throw new Error(formatGraphPublishError("Facebook", res.status, json));
   }
   return { remoteId: json.id, raw: json };
 }

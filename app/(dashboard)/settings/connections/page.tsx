@@ -299,10 +299,33 @@ function ConnectionsInner() {
             </svg>
           }
         >
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-            Uses a Facebook Page Access Token to post to your Page and linked Instagram Business account.
-            Generate a long-lived page token in Meta Business Suite → Settings → Advanced → Page Access Tokens.
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.6 }}>
+            Paste credentials for a <strong style={{ color: "var(--text-secondary)" }}>Facebook Page</strong> (Graph posts as the Page). Instagram publishing uses the same Page token plus the IG user ID below.
           </p>
+          <ul
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              margin: "0 0 14px",
+              paddingLeft: 18,
+              lineHeight: 1.55,
+            }}
+          >
+            <li style={{ marginBottom: 6 }}>
+              Use a <strong style={{ color: "var(--text-secondary)" }}>Page access token</strong>, not a personal profile token. Legacy{" "}
+              <code style={{ fontSize: 11 }}>publish_actions</code> user scopes are deprecated — if Graph returns (#200) about deprecated permissions, regenerate the token from your Meta app with Page scopes.
+            </li>
+            <li style={{ marginBottom: 6 }}>
+              Typical app permissions:{" "}
+              <code style={{ fontSize: 11 }}>pages_manage_posts</code>,{" "}
+              <code style={{ fontSize: 11 }}>pages_read_engagement</code>,{" "}
+              <code style={{ fontSize: 11 }}>instagram_basic</code>,{" "}
+              <code style={{ fontSize: 11 }}>instagram_content_publish</code>.
+            </li>
+            <li>
+              Generate a long-lived Page token from Meta Business Suite (Page settings → Integrations / advanced tools) or Graph API Explorer scoped to your Page.
+            </li>
+          </ul>
           <form onSubmit={saveMeta} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, color: "var(--text-secondary)", display: "block", marginBottom: 5 }}>Page Access Token</label>

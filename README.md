@@ -54,7 +54,9 @@ Human-in-the-loop social media manager: **Gemini** drafts multi-platform copy (s
 
    - Use a **Facebook Page** (not a personal profile) and an **Instagram Business/Creator** account linked to that page.
    - Create a Meta app, add **Facebook Login** / **Instagram** products, request `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`, `pages_read_engagement`.
-   - Obtain a **Page access token** with the required permissions; use **Graph API** to discover **Page ID** and **Instagram Business Account ID** (`{page-id}?fields=instagram_business_account`).
+   - Use a **Page access token** from this flow—not a personal **user** access token. Legacy user permission **`publish_actions` is deprecated**; Graph API may error (#200) if the token was issued for the wrong scopes or account type.
+   - Obtain a long-lived **Page** token with those permissions (Meta Business Suite → your Page → **See profiles**, **Business integrations**, or **Graph API Explorer** scoped to the Page).
+   - Use **Graph API** to confirm **Page ID** and **Instagram Business Account ID** (`GET /{page-id}?fields=instagram_business_account`).
    - Enter **Page access token**, **Page ID**, and **IG User ID** under **Connections** in the app (stored encrypted).
 
 6. **LinkedIn**

@@ -1,3 +1,4 @@
+import { formatGraphPublishError, type GraphApiErrorJson } from "./graph-api-errors";
 import type { PublishInput, PublishResult } from "./types";
 
 /**
@@ -16,9 +17,9 @@ export async function publishInstagram(
   create.searchParams.set("caption", input.caption);
 
   const r1 = await fetch(create.toString(), { method: "POST" });
-  const j1 = (await r1.json()) as { id?: string; error?: { message: string } };
+  const j1 = (await r1.json()) as GraphApiErrorJson;
   if (!r1.ok || !j1.id) {
-    throw new Error(j1.error?.message ?? `Instagram create media ${r1.status}`);
+    throw new Error(formatGraphPublishError("Instagram", r1.status, j1, "create_media"));
   }
 
   const publish = new URL(`${base}/media_publish`);
@@ -26,9 +27,9 @@ export async function publishInstagram(
   publish.searchParams.set("creation_id", j1.id);
 
   const r2 = await fetch(publish.toString(), { method: "POST" });
-  const j2 = (await r2.json()) as { id?: string; error?: { message: string } };
+  const j2 = (await r2.json()) as GraphApiErrorJson;
   if (!r2.ok || !j2.id) {
-    throw new Error(j2.error?.message ?? `Instagram publish ${r2.status}`);
+    throw new Error(formatGraphPublishError("Instagram", r2.status, j2, "publish"));
   }
   return { remoteId: j2.id, raw: j2 };
 }
