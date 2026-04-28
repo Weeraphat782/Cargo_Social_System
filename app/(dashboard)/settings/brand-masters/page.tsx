@@ -84,7 +84,7 @@ export default function BrandMastersPage() {
   }
 
   return (
-    <div style={{ maxWidth: 800 }}>
+    <div style={{ width: "100%", maxWidth: 800, margin: "0 auto" }}>
       <PageHeader
         title="Brand prompt master"
         subtitle="Templates used by the agent and campaign suggester. OMG is seeded from the built-in copy; new brands can clone it and edit JSON."

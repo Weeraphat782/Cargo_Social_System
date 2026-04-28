@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Palette } from "lucide-react";
-import { BrandMasterTemplatePreview } from "@/components/brand-master-template-preview";
+import { BrandMasterPayloadForm } from "@/components/brand-master-payload-form";
 import { PageHeader, Skeleton } from "@/components/ui";
 
 type Row = {
@@ -85,7 +85,7 @@ export default function BrandMasterEditPage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 800 }}>
+      <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto" }}>
         <Skeleton variant="card" height={64} style={{ marginBottom: 16 }} />
         <Skeleton variant="line" width="100%" height={12} style={{ marginBottom: 8 }} />
         <Skeleton variant="card" height={400} />
@@ -95,7 +95,7 @@ export default function BrandMasterEditPage() {
 
   if (!row) {
     return (
-      <div style={{ maxWidth: 800 }}>
+      <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto" }}>
         <p style={{ color: "var(--danger)" }}>{err ?? "Not found."}</p>
         <Link href="/settings/brand-masters" className="omg-btn-ghost" style={{ display: "inline-block", marginTop: 12 }}>
           Back
@@ -105,7 +105,7 @@ export default function BrandMasterEditPage() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ width: "100%", maxWidth: 1120, margin: "0 auto" }}>
       <p style={{ marginBottom: 12 }}>
         <Link href="/settings/brand-masters" className="omg-btn-ghost" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
           <ArrowLeft size={16} />
@@ -138,24 +138,48 @@ export default function BrandMasterEditPage() {
         <input className="omg-input" style={{ marginTop: 4 }} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </label>
 
-      <label style={{ display: "block", fontSize: 12, marginBottom: 8 }}>
-        Payload (JSON)
-      </label>
-      <textarea
-        className="omg-input"
-        spellCheck={false}
-        value={jsonText}
-        onChange={(e) => setJsonText(e.target.value)}
+      <div
         style={{
-          width: "100%",
-          minHeight: 420,
-          fontFamily: "var(--font-mono, ui-monospace, monospace)",
-          fontSize: 12,
-          lineHeight: 1.4,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 16,
+          alignItems: "flex-start",
         }}
-      />
-
-      <BrandMasterTemplatePreview jsonText={jsonText} />
+      >
+        <div style={{ flex: "1 1 380px", minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <label style={{ display: "block", fontSize: 12, marginBottom: 8 }}>
+            Payload (JSON)
+          </label>
+          <textarea
+            className="omg-input"
+            spellCheck={false}
+            value={jsonText}
+            onChange={(e) => setJsonText(e.target.value)}
+            style={{
+              width: "100%",
+              minHeight: 420,
+              fontFamily: "var(--font-mono, ui-monospace, monospace)",
+              fontSize: 12,
+              lineHeight: 1.4,
+              flex: 1,
+            }}
+          />
+        </div>
+        <div
+          style={{
+            flex: "1 1 340px",
+            minWidth: 280,
+            maxWidth: "100%",
+            maxHeight: "calc(100vh - 200px)",
+            overflowY: "auto",
+            position: "sticky",
+            top: 8,
+            alignSelf: "flex-start",
+          }}
+        >
+          <BrandMasterPayloadForm jsonText={jsonText} onJsonTextChange={setJsonText} />
+        </div>
+      </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
         <button type="button" className="omg-btn-primary" disabled={saving} onClick={() => void save()}>
