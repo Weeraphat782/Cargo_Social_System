@@ -53,17 +53,43 @@ function nextMultiWeeklySlot(anchor: Date, tz: string, dows: number[], hour: num
   return best;
 }
 
-export function nextDailySlot(anchor: Date, tz: string, hour: number): Date {
+export function nextDailySlot(
+  anchor: Date,
+  tz: string,
+  hour: number,
+  minute: number = 0
+): Date {
+  const mm = Math.max(0, Math.min(59, minute));
   for (let k = 0; k < 400; k++) {
     const d = k === 0 ? new Date(anchor) : addDays(anchor, k);
     const y = formatInTimeZone(d, tz, "yyyy");
     const m = formatInTimeZone(d, tz, "MM");
     const day = formatInTimeZone(d, tz, "dd");
-    const iso = `${y}-${m}-${day}T${String(hour).padStart(2, "0")}:00:00`;
+    const iso = `${y}-${m}-${day}T${String(hour).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
     const utc = toDate(iso, { timeZone: tz });
     if (utc.getTime() > anchor.getTime()) return utc;
   }
   return addDays(anchor, 1);
+}
+
+/**
+ * Next instant in `tz` where local wall clock equals `hhmm` ("HH:mm"), strictly after `anchor`.
+ */
+export function nextWallClockHmAfter(anchor: Date, tz: string, hhmm: string): Date | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hhmm.trim());
+  if (!m) return null;
+  const hour = parseInt(m[1], 10);
+  const minute = parseInt(m[2], 10);
+  for (let k = 0; k < 400; k++) {
+    const d = k === 0 ? new Date(anchor) : addDays(anchor, k);
+    const y = formatInTimeZone(d, tz, "yyyy");
+    const mo = formatInTimeZone(d, tz, "MM");
+    const day = formatInTimeZone(d, tz, "dd");
+    const iso = `${y}-${mo}-${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+    const utc = toDate(iso, { timeZone: tz });
+    if (utc.getTime() > anchor.getTime()) return utc;
+  }
+  return null;
 }
 
 function slotOnYmd(ymd: string, tz: string, hour: number): Date {
@@ -90,7 +116,7 @@ function slotOnYmdHm(ymdHm: string, tz: string): Date | null {
   return toDate(`${ymdHm}:00`, { timeZone: tz });
 }
 
-function nextTestMinutesSlot(anchor: Date, tz: string, ymdHms: string[]): Date | null {
+function nextCustomDatetimeSlot(anchor: Date, tz: string, ymdHms: string[]): Date | null {
   let best: Date | null = null;
   for (const raw of ymdHms) {
     const slot = slotOnYmdHm(raw, tz);
@@ -160,9 +186,9 @@ export function computeNextRun(c: ComputeNextRunInput, from: Date = new Date()):
     return nextSpecificDateSlot(anchor, tz, dates, hour);
   }
 
-  if (c.cadence === "TEST_MINUTES") {
+  if (c.cadence === "CUSTOM_DATETIMES") {
     const dts = parsed.datetimes?.length ? parsed.datetimes : [];
-    return nextTestMinutesSlot(anchor, tz, dts);
+    return nextCustomDatetimeSlot(anchor, tz, dts);
   }
 
   if (c.cadence === "CUSTOM" && c.customCron?.trim()) {
@@ -195,7 +221,7 @@ export function previewNextRuns(c: ComputeNextRunInput, count: number): Date[] {
       (c.cadence === "SPECIFIC_DATES" && i > 0) ||
       (c.cadence === "DAILY" && i > 0) ||
       (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
+      (c.cadence === "CUSTOM_DATETIMES" && i > 0) ||
       ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
         ? { ...c, lastRunAt: out[i - 1]! }
         : c;
@@ -222,7 +248,7 @@ export function previewNextRunsUntil(
       (c.cadence === "SPECIFIC_DATES" && i > 0) ||
       (c.cadence === "DAILY" && i > 0) ||
       (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
+      (c.cadence === "CUSTOM_DATETIMES" && i > 0) ||
       ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
         ? { ...c, lastRunAt: out[i - 1]! }
         : c;
@@ -251,7 +277,7 @@ export function previewNextRunsInRange(
       (c.cadence === "SPECIFIC_DATES" && i > 0) ||
       (c.cadence === "DAILY" && i > 0) ||
       (c.cadence === "WEEKLY_MULTI" && i > 0) ||
-      (c.cadence === "TEST_MINUTES" && i > 0) ||
+      (c.cadence === "CUSTOM_DATETIMES" && i > 0) ||
       ((c.cadence === "WEEKLY" || c.cadence === "CUSTOM") && i > 0)
         ? { ...c, lastRunAt: out[i - 1]! }
         : c;

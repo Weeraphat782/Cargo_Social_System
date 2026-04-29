@@ -20,6 +20,11 @@ import {
   type CampaignFormFieldsValue,
 } from "./campaign-form-fields";
 import { defaultScheduleValue, endOfDayYmdToIso, type ScheduleEditorValue } from "./schedule-editor";
+import {
+  MAX_PUBLISH_TIME_SLOTS,
+  parsePublishTimesFromText,
+  parsePublishTimesJson,
+} from "@/lib/campaigns/publish-times";
 
 type SuggestedCampaign = {
   name: string;
@@ -49,6 +54,9 @@ type CampaignRow = {
   nextRunAt: string | null;
   autoApprove: boolean;
   publishHourOfDay: number | null;
+  publishMinuteOfHour: number | null;
+  publishSpacingMinutes: number | null;
+  publishTimes: Prisma.JsonValue | null;
   timezone: string;
   startAt: string;
   endAt: string | null;
@@ -101,6 +109,12 @@ const overlayStyle: CSSProperties = {
   padding: 20,
   backdropFilter: "blur(3px)",
 };
+
+function formatPublishWallClock(h: number | null, m: number | null) {
+  if (h == null) return null;
+  const mm = m ?? 0;
+  return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
 
 type AiDraft = Omit<CampaignFormFieldsValue, "schedule">;
 
@@ -217,12 +231,18 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           timezone: schedule.timezone,
           daysOfWeekMulti: schedule.daysOfWeekMulti,
           specificDates: schedule.specificDates,
-          testDatetimes: schedule.testDatetimes,
+          scheduledDatetimes: schedule.scheduledDatetimes,
           platforms: platforms.length ? platforms : undefined,
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : undefined,
           autoApprove,
           publishHourOfDay: manualForm.publishHourOfDay,
+          publishMinuteOfHour: manualForm.publishMinuteOfHour,
+          publishSpacingMinutes: manualForm.publishSpacingMinutes,
+          publishTimes: parsePublishTimesFromText(
+            manualForm.publishTimesText,
+            MAX_PUBLISH_TIME_SLOTS
+          ),
           endAt: schedule.runUntilYmd?.trim()
             ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
             : null,
@@ -258,7 +278,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       hourOfDay: s.hourOfDay,
       daysOfWeekMulti: [s.dayOfWeek],
       specificDates: [],
-      testDatetimes: [],
+      scheduledDatetimes: [],
     });
     setAiDraft({
       name: s.name,
@@ -273,6 +293,9 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       totalPostsCap: "",
       autoApprove: s.autoApprove,
       publishHourOfDay: null,
+      publishMinuteOfHour: null,
+      publishSpacingMinutes: null,
+      publishTimesText: "",
     });
   }
 
@@ -299,12 +322,18 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           timezone: sch.timezone,
           daysOfWeekMulti: sch.daysOfWeekMulti,
           specificDates: sch.specificDates,
-          testDatetimes: sch.testDatetimes,
+          scheduledDatetimes: sch.scheduledDatetimes,
           platforms: draft.platforms.length ? draft.platforms : undefined,
           postsPerRun: draft.postsPerRun,
           totalPostsCap: draft.totalPostsCap ? parseInt(draft.totalPostsCap, 10) : undefined,
           autoApprove: draft.autoApprove,
           publishHourOfDay: draft.publishHourOfDay,
+          publishMinuteOfHour: draft.publishMinuteOfHour,
+          publishSpacingMinutes: draft.publishSpacingMinutes,
+          publishTimes: parsePublishTimesFromText(
+            draft.publishTimesText,
+            MAX_PUBLISH_TIME_SLOTS
+          ),
           endAt: sch.runUntilYmd?.trim()
             ? endOfDayYmdToIso(sch.runUntilYmd.trim(), sch.timezone)
             : null,
@@ -815,7 +844,24 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     {c.status} · {c.brandTemplateId} · {c.contentMode === "SELF_PROMO" ? "self-promo" : "news"} ·{" "}
                     {c.cadence} · {c.theme}
-                    {c.publishHourOfDay != null && ` · pub: ${c.publishHourOfDay}:00`}
+                    {(() => {
+                      const pt = parsePublishTimesJson(c.publishTimes);
+                      if (pt.length > 0) {
+                        const shown = pt.slice(0, 4).join(", ");
+                        return ` · pub: ${shown}${pt.length > 4 ? "…" : ""}`;
+                      }
+                      if (c.publishHourOfDay != null) {
+                        let s = ` · pub: ${formatPublishWallClock(
+                          c.publishHourOfDay,
+                          c.publishMinuteOfHour
+                        )}`;
+                        if (c.publishSpacingMinutes != null) {
+                          s += ` (+${c.publishSpacingMinutes}m)`;
+                        }
+                        return s;
+                      }
+                      return "";
+                    })()}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 4 }}>
                     {c.platforms.map((p) => (

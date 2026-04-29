@@ -6,7 +6,13 @@ import { ChevronDown, Link2 } from "lucide-react";
 import { PageHeader } from "@/components/ui";
 
 type ConnectionsOverview = {
-  meta: { connected: boolean; pageIdPreview?: string; igUserIdPreview?: string };
+  meta: {
+    connected: boolean;
+    pageIdPreview?: string;
+    igUserIdPreview?: string;
+    oauthExpiryApprox?: string | null;
+    oauthExpirySoon?: boolean;
+  };
   linkedin: { connected: boolean; personUrnPreview?: string };
   omg: { configured: boolean; baseHost?: string };
 };
@@ -156,6 +162,37 @@ function ConnectionsInner() {
     if (l && l !== "ok") setMsg({ text: `LinkedIn OAuth error: ${l}`, type: "error" });
   }, [sp, loadOverview]);
 
+  useEffect(() => {
+    const m = sp.get("meta");
+    if (m === "ok") {
+      setMsg({
+        text: "Meta (Facebook Page & Instagram) connected via OAuth.",
+        type: "success",
+      });
+      void loadOverview();
+      return;
+    }
+    if (!m) return;
+    const detail =
+      m === "denied"
+        ? "Access denied — user cancelled Facebook Login."
+        : m === "denied_desc"
+          ? sp.get("d") ?? "Facebook Login error"
+          : m === "state"
+            ? "Invalid OAuth state — try Connect again."
+            : m === "config"
+              ? "Missing META_APP_ID / META_APP_SECRET / META_REDIRECT_URI in server env."
+              : m === "no_pages"
+                ? "No Facebook Pages returned — grant Page access and ensure you manage at least one Page."
+                : m === "no_instagram"
+                  ? "No Instagram Business account linked to that Page — link IG to the Page in Meta Business Suite, then retry."
+                  : m === "graph"
+                    ? sp.get("e") ?? "Graph API error during OAuth"
+                    : `Meta OAuth error: ${m}`;
+    setMsg({ text: detail.length > 420 ? `${detail.slice(0, 417)}…` : detail, type: "error" });
+    void loadOverview();
+  }, [sp, loadOverview]);
+
   const metaOk = overview?.meta.connected ?? false;
   const liOk = overview?.linkedin.connected ?? false;
 
@@ -241,7 +278,13 @@ function ConnectionsInner() {
               </span>
               <span style={{ fontSize: 12, color: "var(--text-muted)", flex: "1 1 200px" }}>
                 {overview.meta.connected
-                  ? [overview.meta.pageIdPreview && `Page ${overview.meta.pageIdPreview}`, overview.meta.igUserIdPreview && `IG ${overview.meta.igUserIdPreview}`]
+                  ? [
+                      overview.meta.pageIdPreview && `Page ${overview.meta.pageIdPreview}`,
+                      overview.meta.igUserIdPreview && `IG ${overview.meta.igUserIdPreview}`,
+                      overview.meta.oauthExpiryApprox &&
+                        `OAuth user token ~until ${overview.meta.oauthExpiryApprox}`,
+                      overview.meta.oauthExpirySoon ? "(reconnect soon)" : null,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "Credentials saved"
                   : "—"}
@@ -300,7 +343,35 @@ function ConnectionsInner() {
           }
         >
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.6 }}>
-            Paste credentials for a <strong style={{ color: "var(--text-secondary)" }}>Facebook Page</strong> (Graph posts as the Page). Instagram publishing uses the same Page token plus the IG user ID below.
+            Prefer <strong style={{ color: "var(--fb)" }}>Connect with Facebook</strong> (OAuth) — we exchange a long-lived user token, fetch your Page token from Graph, and resolve the Instagram Business account ID. Manual paste below still works for Graph Explorer / Business Suite tokens.
+          </p>
+
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <a
+              href="/api/oauth/meta"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                padding: "9px 16px", borderRadius: 8,
+                background: "rgba(24, 119, 242, 0.12)",
+                border: "1px solid rgba(24, 119, 242, 0.45)",
+                color: "var(--fb)", fontSize: 13, fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />
+              </svg>
+              Connect with Facebook (Page + IG)
+            </a>
+          </div>
+
+          <hr className="omg-divider" style={{ marginBottom: 14 }} />
+          <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+            Or paste credentials manually (Graph API Explorer / Business Suite):
+          </p>
+
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.6 }}>
+            Use a <strong style={{ color: "var(--text-secondary)" }}>Facebook Page</strong> (Graph posts as the Page). Instagram publishing uses the same Page token plus the IG user ID below.
           </p>
           <ul
             style={{

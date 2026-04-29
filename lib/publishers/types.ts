@@ -17,6 +17,10 @@ export type MetaTokens = {
   pageAccessToken: string;
   pageId: string;
   igUserId: string;
+  /** Long-lived user token from OAuth — optional; enables future refresh flows. */
+  userAccessToken?: string;
+  /** ISO timestamp when `userAccessToken` expires (approximate). */
+  userAccessTokenExpiresAt?: string;
 };
 
 export type LinkedInTokens = {

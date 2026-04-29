@@ -36,6 +36,9 @@ export type CampaignListRowJson = {
   nextRunAt: string | null;
   autoApprove: boolean;
   publishHourOfDay: number | null;
+  publishMinuteOfHour: number | null;
+  publishSpacingMinutes: number | null;
+  publishTimes: Prisma.JsonValue | null;
   timezone: string;
   startAt: string;
   endAt: string | null;
@@ -65,6 +68,9 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
       nextRunAt: true,
       autoApprove: true,
       publishHourOfDay: true,
+      publishMinuteOfHour: true,
+      publishSpacingMinutes: true,
+      publishTimes: true,
       timezone: true,
       startAt: true,
       endAt: true,
@@ -101,6 +107,9 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
     nextRunAt: c.nextRunAt?.toISOString() ?? null,
     autoApprove: c.autoApprove,
     publishHourOfDay: c.publishHourOfDay,
+    publishMinuteOfHour: c.publishMinuteOfHour,
+    publishSpacingMinutes: c.publishSpacingMinutes,
+    publishTimes: c.publishTimes,
     timezone: c.timezone,
     startAt: c.startAt.toISOString(),
     endAt: c.endAt?.toISOString() ?? null,

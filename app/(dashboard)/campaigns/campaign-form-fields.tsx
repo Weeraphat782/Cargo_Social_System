@@ -3,6 +3,7 @@
 import type { Campaign, CampaignContentMode, CampaignTheme, Platform } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { parseScheduleConfig } from "@/lib/campaigns/schedule-config";
+import { parsePublishTimesJson } from "@/lib/campaigns/publish-times";
 import { CampaignScheduleEditor, defaultScheduleValue, type ScheduleEditorValue } from "./schedule-editor";
 
 export const THEME_LANES: { id: CampaignTheme; label: string }[] = [
@@ -33,6 +34,11 @@ export type CampaignFormFieldsValue = {
   totalPostsCap: string;
   autoApprove: boolean;
   publishHourOfDay: number | null;
+  publishMinuteOfHour: number | null;
+  /** Minutes between posts after first scheduled slot (when using base publish time). Ignored if explicit times set. */
+  publishSpacingMinutes: number | null;
+  /** Newline-separated HH:mm entries; when non-empty, overrides spacing. */
+  publishTimesText: string;
 };
 
 type Props = {
@@ -64,6 +70,9 @@ export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
     totalPostsCap: "",
     autoApprove: false,
     publishHourOfDay: null,
+    publishMinuteOfHour: null,
+    publishSpacingMinutes: null,
+    publishTimesText: "",
   };
 }
 
@@ -89,6 +98,9 @@ export function campaignToFormFieldsValue(
     | "totalPostsCap"
     | "autoApprove"
     | "publishHourOfDay"
+    | "publishMinuteOfHour"
+    | "publishSpacingMinutes"
+    | "publishTimes"
     | "brandTemplateId"
   > & { endAt?: string | Date | null }
 ): CampaignFormFieldsValue {
@@ -125,7 +137,7 @@ export function campaignToFormFieldsValue(
       timezone: tz,
       daysOfWeekMulti: peDays,
       specificDates: parsed.dates?.length ? parsed.dates : [],
-      testDatetimes: parsed.datetimes?.length ? parsed.datetimes : [],
+      scheduledDatetimes: parsed.datetimes?.length ? parsed.datetimes : [],
       runUntilYmd,
     },
     platforms: c.platforms?.length ? [...c.platforms] : [...FORM_PLATFORM_FALLBACK],
@@ -133,6 +145,10 @@ export function campaignToFormFieldsValue(
     totalPostsCap: c.totalPostsCap != null ? String(c.totalPostsCap) : "",
     autoApprove: c.autoApprove,
     publishHourOfDay: c.publishHourOfDay ?? null,
+    publishMinuteOfHour:
+      c.publishHourOfDay != null ? (c.publishMinuteOfHour ?? 0) : null,
+    publishSpacingMinutes: c.publishSpacingMinutes ?? null,
+    publishTimesText: parsePublishTimesJson(c.publishTimes).join("\n"),
   };
 }
 
@@ -142,6 +158,122 @@ function togglePlatform(prev: Platform[], p: Platform): Platform[] {
     return next.length ? next : prev;
   }
   return [...prev, p];
+}
+
+function PublishTimeFields({
+  idPrefix,
+  publishHourOfDay,
+  publishMinuteOfHour,
+  publishSpacingMinutes,
+  publishTimesText,
+  onChange,
+}: {
+  idPrefix: string;
+  publishHourOfDay: number | null;
+  publishMinuteOfHour: number | null;
+  publishSpacingMinutes: number | null;
+  publishTimesText: string;
+  onChange: (patch: Partial<CampaignFormFieldsValue>) => void;
+}) {
+  const explicitTimes = publishTimesText.trim().length > 0;
+  const spacingEnabled = publishHourOfDay != null && !explicitTimes;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 600 }}>Publish time (campaign TZ)</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, width: 110 }}>
+          Hour (0–23)
+          <input
+            className="omg-input"
+            type="number"
+            min={0}
+            max={23}
+            id={`${idPrefix}-pub-h`}
+            value={publishHourOfDay ?? ""}
+            placeholder="—"
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              if (v === "") {
+                onChange({
+                  publishHourOfDay: null,
+                  publishMinuteOfHour: null,
+                  publishSpacingMinutes: null,
+                });
+                return;
+              }
+              const h = Math.max(0, Math.min(23, parseInt(v, 10) || 0));
+              onChange({
+                publishHourOfDay: h,
+                publishMinuteOfHour: publishMinuteOfHour ?? 0,
+              });
+            }}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, width: 110 }}>
+          Minute (0–59)
+          <input
+            className="omg-input"
+            type="number"
+            min={0}
+            max={59}
+            disabled={publishHourOfDay == null}
+            id={`${idPrefix}-pub-m`}
+            value={publishHourOfDay != null ? publishMinuteOfHour ?? 0 : ""}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              if (publishHourOfDay == null) return;
+              if (v === "") {
+                onChange({ publishMinuteOfHour: 0 });
+                return;
+              }
+              onChange({
+                publishMinuteOfHour: Math.max(0, Math.min(59, parseInt(v, 10) || 0)),
+              });
+            }}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, width: 120 }}>
+          Between posts (min)
+          <input
+            className="omg-input"
+            type="number"
+            min={1}
+            max={1440}
+            disabled={!spacingEnabled}
+            id={`${idPrefix}-pub-gap`}
+            value={spacingEnabled ? publishSpacingMinutes ?? "" : ""}
+            placeholder="5"
+            title="Minutes after the first post’s scheduled time for each additional post"
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              onChange({
+                publishSpacingMinutes:
+                  v === "" ? null : Math.max(1, Math.min(1440, parseInt(v, 10) || 5)),
+              });
+            }}
+          />
+        </label>
+      </div>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+        Specific publish times (HH:mm), one per line — overrides spacing
+        <textarea
+          className="omg-input"
+          rows={4}
+          id={`${idPrefix}-pub-times`}
+          value={publishTimesText}
+          placeholder={"09:00\n09:15\n09:30"}
+          style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+          onChange={(e) => onChange({ publishTimesText: e.target.value })}
+        />
+      </label>
+      <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
+        With auto-approve: set a base hour/minute and gap (e.g. 15) so each post in the run schedules at
+        increasing times; or list exact HH:mm values (cycles if there are more posts than lines). Leave hour
+        empty to publish ~2 min after the agent runs.
+      </span>
+    </div>
+  );
 }
 
 export function CampaignFormFields({
@@ -155,7 +287,23 @@ export function CampaignFormFields({
   alwaysShowAdvanced = false,
   brandOptions,
 }: Props) {
-  const { name, brandTemplateId, contentMode, keywords, description, brandVoice, theme, schedule, platforms, postsPerRun, autoApprove, publishHourOfDay } = value;
+  const {
+    name,
+    brandTemplateId,
+    contentMode,
+    keywords,
+    description,
+    brandVoice,
+    theme,
+    schedule,
+    platforms,
+    postsPerRun,
+    autoApprove,
+    publishHourOfDay,
+    publishMinuteOfHour,
+    publishSpacingMinutes,
+    publishTimesText,
+  } = value;
 
   const advancedBlock = (
     <div style={{ display: "grid", gap: 12 }}>
@@ -231,26 +379,14 @@ export function CampaignFormFields({
             Auto-approve
           </label>
           {autoApprove && (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 220 }}>
-              Publish hour (0–23)
-              <input
-                className="omg-input"
-                type="number"
-                min={0}
-                max={23}
-                value={publishHourOfDay ?? ""}
-                placeholder="e.g. 10"
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  onChange({
-                    publishHourOfDay: v === "" ? null : Math.max(0, Math.min(23, parseInt(v, 10) || 0)),
-                  });
-                }}
-              />
-              <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
-                Posts will publish at this hour. Leave empty to publish ~2 min after the agent runs.
-              </span>
-            </label>
+            <PublishTimeFields
+              idPrefix={`${idPrefix}-adv`}
+              publishHourOfDay={publishHourOfDay}
+              publishMinuteOfHour={publishMinuteOfHour}
+              publishSpacingMinutes={publishSpacingMinutes}
+              publishTimesText={publishTimesText}
+              onChange={onChange}
+            />
           )}
         </>
       ) : null}
@@ -357,26 +493,16 @@ export function CampaignFormFields({
             Auto-approve
           </label>
           {autoApprove && (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 280 }}>
-              Publish hour (0–23)
-              <input
-                className="omg-input"
-                type="number"
-                min={0}
-                max={23}
-                value={publishHourOfDay ?? ""}
-                placeholder="e.g. 10"
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  onChange({
-                    publishHourOfDay: v === "" ? null : Math.max(0, Math.min(23, parseInt(v, 10) || 0)),
-                  });
-                }}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <PublishTimeFields
+                idPrefix={`${idPrefix}-ai`}
+                publishHourOfDay={publishHourOfDay}
+                publishMinuteOfHour={publishMinuteOfHour}
+                publishSpacingMinutes={publishSpacingMinutes}
+                publishTimesText={publishTimesText}
+                onChange={onChange}
               />
-              <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
-                Posts will publish at this hour. Leave empty to publish ~2 min after the agent runs.
-              </span>
-            </label>
+            </div>
           )}
         </div>
       )}

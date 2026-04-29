@@ -12,7 +12,8 @@ import {
 } from "@prisma/client";
 import { addMinutes } from "date-fns";
 import { prisma } from "@/lib/db";
-import { nextDailySlot } from "@/lib/campaigns/schedule-math";
+import { nextDailySlot, nextWallClockHmAfter } from "@/lib/campaigns/schedule-math";
+import { parsePublishTimesJson } from "@/lib/campaigns/publish-times";
 import { requireEnv } from "@/lib/env";
 import { searchNews, searchNewsWithGemini, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
@@ -454,6 +455,22 @@ export async function runAgentForCampaign(
 
   const selfPromo = campaign.contentMode === CampaignContentMode.SELF_PROMO;
   const BATCH_SPREAD_MINUTES = 5;
+  const tz = campaign.timezone || "Asia/Bangkok";
+  const publishTimesList = parsePublishTimesJson(campaign.publishTimes);
+  let spacingBaseSlot: Date | null = null;
+  if (
+    campaign.autoApprove &&
+    publishTimesList.length === 0 &&
+    campaign.publishHourOfDay != null
+  ) {
+    spacingBaseSlot = nextDailySlot(
+      new Date(),
+      tz,
+      campaign.publishHourOfDay,
+      campaign.publishMinuteOfHour ?? 0
+    );
+  }
+  let explicitSearchAnchor = new Date();
 
   let results: GoogleNewsResult[] = [];
   if (!selfPromo) {
@@ -611,16 +628,19 @@ export async function runAgentForCampaign(
       : PostStatus.PENDING_APPROVAL;
     let scheduleAt: Date | null = null;
     if (campaign.autoApprove) {
-      if (campaign.publishHourOfDay != null) {
-        // Schedule at the desired publish hour in campaign timezone
-        const tz = campaign.timezone || "Asia/Bangkok";
-        scheduleAt = nextDailySlot(
-          addMinutes(new Date(), i * BATCH_SPREAD_MINUTES),
-          tz,
-          campaign.publishHourOfDay
-        );
+      if (publishTimesList.length > 0) {
+        const hm = publishTimesList[i % publishTimesList.length];
+        const slot = nextWallClockHmAfter(explicitSearchAnchor, tz, hm);
+        if (slot != null) {
+          scheduleAt = slot;
+          explicitSearchAnchor = addMinutes(slot, 1);
+        } else {
+          scheduleAt = addMinutes(new Date(), 2 + i * BATCH_SPREAD_MINUTES);
+        }
+      } else if (campaign.publishHourOfDay != null && spacingBaseSlot != null) {
+        const spacing = campaign.publishSpacingMinutes ?? BATCH_SPREAD_MINUTES;
+        scheduleAt = addMinutes(spacingBaseSlot, i * spacing);
       } else {
-        // Legacy: publish ~2 min after agent runs
         scheduleAt = addMinutes(new Date(), 2 + i * BATCH_SPREAD_MINUTES);
       }
     }

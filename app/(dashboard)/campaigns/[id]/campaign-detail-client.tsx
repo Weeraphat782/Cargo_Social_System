@@ -260,9 +260,9 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
             <br />
             Last run: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : "—"}
             <br />
-            {c.cadence === "TEST_MINUTES" && Array.isArray((c.scheduleConfig as { datetimes?: string[] } | null)?.datetimes) ? (
+            {c.cadence === "CUSTOM_DATETIMES" && Array.isArray((c.scheduleConfig as { datetimes?: string[] } | null)?.datetimes) ? (
               <>
-                Test slots (TZ {c.timezone}):{" "}
+                Scheduled slots (TZ {c.timezone}):{" "}
                 {((c.scheduleConfig as { datetimes: string[] }).datetimes || []).join(", ")}
                 <br />
               </>
@@ -306,7 +306,10 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
             {c.autoApprove && (
               <>
                 <br />
-                Publish hour: {c.publishHourOfDay != null ? `${c.publishHourOfDay}:00` : "Immediate (~2 min after draft)"}
+                Publish time:{" "}
+                {c.publishHourOfDay != null
+                  ? `${String(c.publishHourOfDay).padStart(2, "0")}:${String(c.publishMinuteOfHour ?? 0).padStart(2, "0")}`
+                  : "Immediate (~2 min after draft)"}
               </>
             )}
           </div>

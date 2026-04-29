@@ -13,6 +13,7 @@ import {
   CampaignFormFields,
   type CampaignFormFieldsValue,
 } from "../../campaign-form-fields";
+import { MAX_PUBLISH_TIME_SLOTS, parsePublishTimesFromText } from "@/lib/campaigns/publish-times";
 
 type CampaignLoad = {
   id: string;
@@ -34,6 +35,9 @@ type CampaignLoad = {
   totalPostsCap: number | null;
   autoApprove: boolean;
   publishHourOfDay: number | null;
+  publishMinuteOfHour: number | null;
+  publishSpacingMinutes: number | null;
+  publishTimes: Prisma.JsonValue | null;
   endAt: string | null;
 };
 
@@ -124,12 +128,15 @@ export default function EditCampaignPage() {
           timezone: schedule.timezone,
           daysOfWeekMulti: schedule.daysOfWeekMulti,
           specificDates: schedule.specificDates,
-          testDatetimes: schedule.testDatetimes,
+          scheduledDatetimes: schedule.scheduledDatetimes,
           platforms: platforms.length ? platforms : undefined,
           postsPerRun,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : null,
           autoApprove,
           publishHourOfDay: form.publishHourOfDay,
+          publishMinuteOfHour: form.publishMinuteOfHour,
+          publishSpacingMinutes: form.publishSpacingMinutes,
+          publishTimes: parsePublishTimesFromText(form.publishTimesText, MAX_PUBLISH_TIME_SLOTS),
           endAt: schedule.runUntilYmd?.trim()
             ? endOfDayYmdToIso(schedule.runUntilYmd.trim(), schedule.timezone)
             : null,

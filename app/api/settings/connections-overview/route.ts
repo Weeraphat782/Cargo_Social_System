@@ -19,6 +19,23 @@ function previewLinkedInUrn(urn: string): string | undefined {
   return seg.length > 14 ? `···${seg.slice(-12)}` : seg;
 }
 
+/** ISO date prefix or null — OAuth user token expiry is approximate (~60 days). */
+function oauthExpiryApprox(isoOrDate: string | Date | null | undefined): string | null {
+  if (!isoOrDate) return null;
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(String(isoOrDate));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+/** True when expiry within 14 days (prompt reconnect). */
+function oauthExpirySoon(isoOrDate: string | Date | null | undefined): boolean {
+  if (!isoOrDate) return false;
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(String(isoOrDate));
+  if (Number.isNaN(d.getTime())) return false;
+  const daysLeft = (d.getTime() - Date.now()) / (86400 * 1000);
+  return daysLeft <= 14 && daysLeft >= 0;
+}
+
 function hostFromBaseUrl(url: string | undefined): string | undefined {
   if (!url?.trim()) return undefined;
   try {
@@ -35,7 +52,13 @@ export async function GET() {
   const metaRow = await prisma.platformCredential.findUnique({
     where: { type: CredentialType.META },
   });
-  let meta: { connected: boolean; pageIdPreview?: string; igUserIdPreview?: string };
+  let meta: {
+    connected: boolean;
+    pageIdPreview?: string;
+    igUserIdPreview?: string;
+    oauthExpiryApprox?: string | null;
+    oauthExpirySoon?: boolean;
+  };
   if (!metaRow) {
     meta = { connected: false };
   } else {
@@ -45,6 +68,8 @@ export async function GET() {
         connected: true,
         pageIdPreview: previewNumericId(tokens.pageId),
         igUserIdPreview: previewNumericId(tokens.igUserId),
+        oauthExpiryApprox: oauthExpiryApprox(tokens.userAccessTokenExpiresAt ?? metaRow.expiresAt),
+        oauthExpirySoon: oauthExpirySoon(tokens.userAccessTokenExpiresAt ?? metaRow.expiresAt),
       };
     } catch {
       meta = { connected: true };

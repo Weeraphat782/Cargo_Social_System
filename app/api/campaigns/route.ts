@@ -11,7 +11,15 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { fetchCampaignsListForPage } from "@/lib/campaigns-list-payload";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
-import { toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
+import {
+  MAX_CUSTOM_DATETIME_SLOTS,
+  normalizeScheduledDatetimeSlots,
+  toStoredScheduleConfig,
+} from "@/lib/campaigns/schedule-config";
+import {
+  MAX_PUBLISH_TIME_SLOTS,
+  normalizePublishTimesFromApi,
+} from "@/lib/campaigns/publish-times";
 import { revalidateTag } from "next/cache";
 import { isBrandTemplateId } from "@/lib/brands/registry";
 
@@ -46,12 +54,17 @@ export async function POST(req: Request) {
     totalPostsCap?: number | null;
     autoApprove?: boolean;
     publishHourOfDay?: number | null;
+    publishMinuteOfHour?: number | null;
+    publishSpacingMinutes?: number | null;
+    publishTimes?: string[] | null;
     startAt?: string;
     endAt?: string | null;
     status?: CampaignStatus;
     daysOfWeekMulti?: number[];
     specificDates?: string[];
+    /** @deprecated Use scheduledDatetimes */
     testDatetimes?: string[];
+    scheduledDatetimes?: string[];
     brandTemplateId?: string;
   };
 
@@ -99,16 +112,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Select at least one post date" }, { status: 400 });
     }
   }
-  if (body.cadence === "TEST_MINUTES") {
-    if (process.env.NODE_ENV === "production") {
+  if (body.cadence === "CUSTOM_DATETIMES") {
+    const td = normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes);
+    if (td.length === 0) {
       return NextResponse.json(
-        { error: "TEST_MINUTES cadence is not allowed in production" },
+        { error: "Add at least one scheduled datetime (YYYY-MM-DDTHH:mm)" },
         { status: 400 }
       );
     }
-    const td = (body.testDatetimes ?? []).filter((d) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d));
-    if (td.length === 0) {
-      return NextResponse.json({ error: "Add at least one test datetime" }, { status: 400 });
+    if (td.length > MAX_CUSTOM_DATETIME_SLOTS) {
+      return NextResponse.json(
+        { error: `At most ${MAX_CUSTOM_DATETIME_SLOTS} datetime slots allowed` },
+        { status: 400 }
+      );
     }
   }
 
@@ -116,12 +132,12 @@ export async function POST(req: Request) {
     body.cadence === "DAILY" ||
     body.cadence === "WEEKLY_MULTI" ||
     body.cadence === "SPECIFIC_DATES" ||
-    body.cadence === "TEST_MINUTES";
+    body.cadence === "CUSTOM_DATETIMES";
   const scRaw = toStoredScheduleConfig(
     body.cadence,
     body.daysOfWeekMulti ?? [],
     body.specificDates ?? [],
-    body.testDatetimes ?? []
+    normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes)
   );
   const scheduleConfig: Prisma.InputJsonValue | typeof Prisma.JsonNull = needsScheduleConfig
     ? (scRaw != null ? scRaw : ({} as Prisma.InputJsonValue))
@@ -136,10 +152,39 @@ export async function POST(req: Request) {
   const postsPerRun = Math.min(5, Math.max(1, body.postsPerRun ?? 1));
   const dayOfWeek = body.dayOfWeek ?? 1;
   const hourOfDay = body.hourOfDay ?? 9;
+  if (typeof body.publishMinuteOfHour === "number" && body.publishHourOfDay == null) {
+    return NextResponse.json(
+      { error: "publishHourOfDay is required when publishMinuteOfHour is set" },
+      { status: 400 }
+    );
+  }
+
   const publishHourOfDay =
     body.publishHourOfDay != null
       ? Math.max(0, Math.min(23, body.publishHourOfDay))
       : null;
+  const publishTimesNorm = normalizePublishTimesFromApi(body.publishTimes);
+  if (publishTimesNorm.length > MAX_PUBLISH_TIME_SLOTS) {
+    return NextResponse.json(
+      { error: `At most ${MAX_PUBLISH_TIME_SLOTS} publish times allowed` },
+      { status: 400 }
+    );
+  }
+
+  const publishMinuteOfHour =
+    publishHourOfDay != null && typeof body.publishMinuteOfHour === "number"
+      ? Math.max(0, Math.min(59, body.publishMinuteOfHour))
+      : null;
+
+  let publishSpacingMinutes: number | null = null;
+  if (
+    publishTimesNorm.length === 0 &&
+    publishHourOfDay != null &&
+    typeof body.publishSpacingMinutes === "number"
+  ) {
+    publishSpacingMinutes = Math.max(1, Math.min(1440, Math.floor(body.publishSpacingMinutes)));
+  }
+
   const timezone = (body.timezone ?? "Asia/Bangkok").trim() || "Asia/Bangkok";
 
   const nextRunAt =
@@ -191,6 +236,12 @@ export async function POST(req: Request) {
       totalPostsCap: body.totalPostsCap ?? null,
       autoApprove: body.autoApprove ?? false,
       publishHourOfDay,
+      publishMinuteOfHour,
+      publishSpacingMinutes,
+      publishTimes:
+        publishTimesNorm.length > 0
+          ? (publishTimesNorm as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       startAt,
       endAt,
       nextRunAt,

@@ -25,6 +25,8 @@ const serverSchema = z.object({
   R2_PUBLIC_BASE_URL: z.string().url().optional(),
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
+  /** Must match Meta App → Facebook Login → Valid OAuth redirect URIs exactly */
+  META_REDIRECT_URI: z.string().url().optional(),
   LINKEDIN_CLIENT_ID: z.string().optional(),
   LINKEDIN_CLIENT_SECRET: z.string().optional(),
   CRON_SECRET: z.string().optional(),

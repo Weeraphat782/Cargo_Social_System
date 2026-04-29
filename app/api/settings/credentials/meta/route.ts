@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { CredentialType } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-import { encryptPayload } from "@/lib/crypto";
+import { encryptPayload, decryptPayload } from "@/lib/crypto";
 import type { MetaTokens } from "@/lib/publishers/types";
 
 export async function POST(req: Request) {
@@ -18,15 +18,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const encryptedPayload = encryptPayload(body);
+    const existing = await prisma.platformCredential.findUnique({
+      where: { type: CredentialType.META },
+    });
+
+    let merged: MetaTokens = body;
+    if (existing) {
+      try {
+        const prev = decryptPayload<MetaTokens>(existing.encryptedPayload);
+        merged = {
+          ...prev,
+          pageAccessToken: body.pageAccessToken,
+          pageId: body.pageId,
+          igUserId: body.igUserId,
+        };
+      } catch {
+        merged = body;
+      }
+    }
+
+    const encryptedPayload = encryptPayload(merged);
 
     await prisma.platformCredential.upsert({
       where: { type: CredentialType.META },
       create: {
         type: CredentialType.META,
         encryptedPayload,
+        expiresAt: null,
       },
-      update: { encryptedPayload },
+      update: { encryptedPayload, expiresAt: null },
     });
 
     return NextResponse.json({ ok: true });

@@ -47,8 +47,8 @@ enum CampaignCadence {
   MONTHLY
   SPECIFIC_DATES
   CUSTOM
-  /// Dev-only: minute-level datetimes in scheduleConfig.datetimes; blocked in production API.
-  TEST_MINUTES
+  /// Minute-level wall times in scheduleConfig.datetimes (YYYY-MM-DDTHH:mm in campaign TZ).
+  CUSTOM_DATETIMES
 }
 
 enum CampaignTheme {
@@ -132,6 +132,12 @@ model Campaign {
   /// Desired wall-clock hour (0-23) for the post to actually go live.
   /// When null + autoApprove, posts publish ~2 min after the agent run.
   publishHourOfDay Int?
+  /// Minute within that hour (0-59). Null means 0 when publishHourOfDay is set (legacy rows).
+  publishMinuteOfHour Int?
+  /// Minutes between each post's scheduled publish time after the first slot (campaign TZ). Agent defaults to 5 when null.
+  publishSpacingMinutes Int?
+  /// Optional explicit wall-clock times HH:mm (campaign TZ), in order; cycles if fewer than postsPerRun. Overrides spacing when non-empty.
+  publishTimes          Json?
   timezone      String            @default("Asia/Bangkok")
   customCron    String?
   scheduleConfig Json?

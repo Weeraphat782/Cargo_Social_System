@@ -11,7 +11,17 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
-import { parseScheduleConfig, toStoredScheduleConfig } from "@/lib/campaigns/schedule-config";
+import {
+  MAX_CUSTOM_DATETIME_SLOTS,
+  normalizeScheduledDatetimeSlots,
+  parseScheduleConfig,
+  toStoredScheduleConfig,
+} from "@/lib/campaigns/schedule-config";
+import {
+  MAX_PUBLISH_TIME_SLOTS,
+  normalizePublishTimesFromApi,
+  parsePublishTimesJson,
+} from "@/lib/campaigns/publish-times";
 import type { CampaignCadence, CampaignTheme } from "@prisma/client";
 import { isBrandTemplateId } from "@/lib/brands/registry";
 
@@ -34,12 +44,17 @@ type PatchBody = {
   totalPostsCap?: number | null;
   autoApprove?: boolean;
   publishHourOfDay?: number | null;
+  publishMinuteOfHour?: number | null;
+  publishSpacingMinutes?: number | null;
+  publishTimes?: string[] | null;
   startAt?: string;
   endAt?: string | null;
   status?: CampaignStatus;
   daysOfWeekMulti?: number[];
   specificDates?: string[];
+  /** @deprecated Use scheduledDatetimes */
   testDatetimes?: string[];
+  scheduledDatetimes?: string[];
   scheduleConfig?: Prisma.JsonValue | null;
   brandTemplateId?: string;
 };
@@ -131,14 +146,6 @@ export async function PATCH(
   const existing = await prisma.campaign.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const mergedCadenceEarly = body.cadence ?? existing.cadence;
-  if (mergedCadenceEarly === "TEST_MINUTES" && process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "TEST_MINUTES cadence is not allowed in production" },
-      { status: 400 }
-    );
-  }
-
   const u: Prisma.CampaignUpdateInput = {};
   if (body.name != null) u.name = body.name;
   if (body.description !== undefined) u.description = body.description;
@@ -171,14 +178,14 @@ export async function PATCH(
     body.cadence != null ||
     body.daysOfWeekMulti != null ||
     body.specificDates != null ||
-    (body.testDatetimes != null &&
-      (effectiveCadence === "TEST_MINUTES" || body.cadence === "TEST_MINUTES"));
+    ((body.scheduledDatetimes !== undefined || body.testDatetimes !== undefined) &&
+      (effectiveCadence === "CUSTOM_DATETIMES" || body.cadence === "CUSTOM_DATETIMES"));
   if (scheduleFieldsTouched) {
     const needs =
       effectiveCadence === "DAILY" ||
       effectiveCadence === "WEEKLY_MULTI" ||
       effectiveCadence === "SPECIFIC_DATES" ||
-      effectiveCadence === "TEST_MINUTES";
+      effectiveCadence === "CUSTOM_DATETIMES";
     if (needs) {
       const pe = parseScheduleConfig(effectiveCadence, existing.scheduleConfig);
       const daysM =
@@ -186,11 +193,23 @@ export async function PATCH(
         pe.daysOfWeek ??
         (effectiveCadence === "WEEKLY_MULTI" ? [existing.dayOfWeek ?? 1] : []);
       const dates = body.specificDates ?? pe.dates ?? [];
-      const testD = (body.testDatetimes ?? pe.datetimes ?? []).filter((d) =>
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
-      );
-      if (effectiveCadence === "TEST_MINUTES" && testD.length === 0) {
-        return NextResponse.json({ error: "Add at least one test datetime" }, { status: 400 });
+      const testD =
+        body.scheduledDatetimes !== undefined || body.testDatetimes !== undefined
+          ? normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes)
+          : normalizeScheduledDatetimeSlots(pe.datetimes ?? []);
+      if (effectiveCadence === "CUSTOM_DATETIMES") {
+        if (testD.length === 0) {
+          return NextResponse.json(
+            { error: "Add at least one scheduled datetime (YYYY-MM-DDTHH:mm)" },
+            { status: 400 }
+          );
+        }
+        if (testD.length > MAX_CUSTOM_DATETIME_SLOTS) {
+          return NextResponse.json(
+            { error: `At most ${MAX_CUSTOM_DATETIME_SLOTS} datetime slots allowed` },
+            { status: 400 }
+          );
+        }
       }
       const sc = toStoredScheduleConfig(effectiveCadence, daysM, dates, testD);
       u.scheduleConfig = sc != null ? sc : Prisma.JsonNull;
@@ -202,6 +221,7 @@ export async function PATCH(
     body.scheduleConfig !== undefined &&
     body.daysOfWeekMulti == null &&
     body.specificDates == null &&
+    body.scheduledDatetimes == null &&
     body.testDatetimes == null
   ) {
     u.scheduleConfig = body.scheduleConfig === null ? Prisma.JsonNull : body.scheduleConfig;
@@ -216,6 +236,59 @@ export async function PATCH(
       body.publishHourOfDay != null
         ? Math.max(0, Math.min(23, body.publishHourOfDay))
         : null;
+    if (body.publishHourOfDay === null) {
+      u.publishMinuteOfHour = null;
+      u.publishSpacingMinutes = null;
+    }
+  }
+  if (body.publishMinuteOfHour !== undefined) {
+    if (typeof body.publishMinuteOfHour === "number") {
+      const effHour =
+        body.publishHourOfDay !== undefined ? body.publishHourOfDay : existing.publishHourOfDay;
+      if (effHour == null) {
+        return NextResponse.json(
+          { error: "publishHourOfDay is required when publishMinuteOfHour is set" },
+          { status: 400 }
+        );
+      }
+      u.publishMinuteOfHour = Math.max(0, Math.min(59, body.publishMinuteOfHour));
+    } else {
+      u.publishMinuteOfHour = null;
+    }
+  }
+  if (body.publishTimes !== undefined) {
+    const list = normalizePublishTimesFromApi(body.publishTimes);
+    if (list.length > MAX_PUBLISH_TIME_SLOTS) {
+      return NextResponse.json(
+        { error: `At most ${MAX_PUBLISH_TIME_SLOTS} publish times allowed` },
+        { status: 400 }
+      );
+    }
+    u.publishTimes =
+      list.length > 0 ? (list as unknown as Prisma.InputJsonValue) : Prisma.JsonNull;
+    if (list.length > 0) u.publishSpacingMinutes = null;
+  }
+  if (body.publishSpacingMinutes !== undefined) {
+    const mergedTimesLen =
+      body.publishTimes !== undefined
+        ? normalizePublishTimesFromApi(body.publishTimes).length
+        : parsePublishTimesJson(existing.publishTimes).length;
+    const effHour =
+      body.publishHourOfDay !== undefined ? body.publishHourOfDay : existing.publishHourOfDay;
+    if (body.publishSpacingMinutes === null) {
+      u.publishSpacingMinutes = null;
+    } else if (typeof body.publishSpacingMinutes === "number") {
+      if (mergedTimesLen === 0 && effHour != null) {
+        u.publishSpacingMinutes = Math.max(
+          1,
+          Math.min(1440, Math.floor(body.publishSpacingMinutes))
+        );
+      } else {
+        u.publishSpacingMinutes = null;
+      }
+    } else {
+      u.publishSpacingMinutes = null;
+    }
   }
   if (body.startAt) u.startAt = new Date(body.startAt);
   if (body.endAt !== undefined) u.endAt = body.endAt ? new Date(body.endAt) : null;
@@ -226,14 +299,15 @@ export async function PATCH(
 
   const mergedCadence = body.cadence ?? existing.cadence;
   const mergedParsed = parseScheduleConfig(mergedCadence, existing.scheduleConfig);
-  const mergedTestD = (body.testDatetimes ?? mergedParsed.datetimes ?? []).filter((d) =>
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
-  );
+  const mergedTestD =
+    body.scheduledDatetimes !== undefined || body.testDatetimes !== undefined
+      ? normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes)
+      : normalizeScheduledDatetimeSlots(mergedParsed.datetimes ?? []);
   const mergedScheduleForCompute: Prisma.JsonValue | null =
     mergedCadence === "DAILY" ||
     mergedCadence === "WEEKLY_MULTI" ||
     mergedCadence === "SPECIFIC_DATES" ||
-    mergedCadence === "TEST_MINUTES"
+    mergedCadence === "CUSTOM_DATETIMES"
       ? ((toStoredScheduleConfig(
           mergedCadence,
           body.daysOfWeekMulti ?? mergedParsed.daysOfWeek ?? [existing.dayOfWeek ?? 1],
@@ -255,7 +329,8 @@ export async function PATCH(
       body.cadence != null ||
       body.daysOfWeekMulti != null ||
       body.specificDates != null ||
-      (body.testDatetimes != null && mergedCadence === "TEST_MINUTES")
+      ((body.scheduledDatetimes !== undefined || body.testDatetimes !== undefined) &&
+        mergedCadence === "CUSTOM_DATETIMES")
         ? mergedScheduleForCompute
         : (existing.scheduleConfig as Prisma.JsonValue | null),
   };
@@ -269,7 +344,8 @@ export async function PATCH(
     body.customCron !== undefined ||
     body.daysOfWeekMulti != null ||
     body.specificDates != null ||
-    (body.testDatetimes != null && (mergedCadence === "TEST_MINUTES" || body.cadence === "TEST_MINUTES")) ||
+    ((body.scheduledDatetimes !== undefined || body.testDatetimes !== undefined) &&
+      (mergedCadence === "CUSTOM_DATETIMES" || body.cadence === "CUSTOM_DATETIMES")) ||
     body.scheduleConfig !== undefined;
 
   if (touchedSchedule) {

@@ -6,9 +6,24 @@ export type ScheduleConfigJson = Prisma.JsonValue;
 export type NormalizedScheduleConfig = {
   daysOfWeek?: number[]; // WEEKLY_MULTI: 0..6
   dates?: string[]; // SPECIFIC_DATES: YYYY-MM-DD in campaign TZ
-  /** TEST_MINUTES: YYYY-MM-DDTHH:mm in campaign TZ (wall clock, no offset) */
+  /** CUSTOM_DATETIMES: YYYY-MM-DDTHH:mm in campaign TZ (wall clock, no offset) */
   datetimes?: string[];
 };
+
+/** Maximum datetime slots per campaign (`CUSTOM_DATETIMES` cadence). */
+export const MAX_CUSTOM_DATETIME_SLOTS = 96;
+
+/** Dedupe, validate pattern, sort — merges deprecated `testDatetimes` from APIs when provided. */
+export function normalizeScheduledDatetimeSlots(
+  scheduled?: string[] | null,
+  deprecatedTest?: string[] | null
+): string[] {
+  const raw = [...(scheduled ?? []), ...(deprecatedTest ?? [])];
+  const filtered = raw
+    .map((d) => String(d).trim())
+    .filter((d) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d));
+  return [...new Set(filtered)].sort();
+}
 
 export function parseScheduleConfig(
   cadence: CampaignCadence,
@@ -34,7 +49,7 @@ export function parseScheduleConfig(
       .sort();
     return { dates: [...new Set(dates)] };
   }
-  if (cadence === "TEST_MINUTES" && Array.isArray(o.datetimes)) {
+  if (cadence === "CUSTOM_DATETIMES" && Array.isArray(o.datetimes)) {
     const datetimes = o.datetimes
       .map((d) => String(d).trim())
       .filter((d) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d));
@@ -48,7 +63,7 @@ export function buildScheduleConfigJson(
   cadence: CampaignCadence,
   daysOfWeekMulti: number[],
   specificDates: string[],
-  testDatetimes: string[] = []
+  scheduledDatetimes: string[] = []
 ): Record<string, unknown> | null {
   if (cadence === "WEEKLY_MULTI") {
     const d = [...new Set(daysOfWeekMulti.filter((n) => n >= 0 && n <= 6))].sort((a, b) => a - b);
@@ -64,10 +79,10 @@ export function buildScheduleConfigJson(
     ].sort();
     return { dates: s };
   }
-  if (cadence === "TEST_MINUTES") {
+  if (cadence === "CUSTOM_DATETIMES") {
     const s = [
       ...new Set(
-        testDatetimes
+        scheduledDatetimes
           .map((d) => d.trim())
           .filter((d) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d))
       ),
@@ -78,14 +93,14 @@ export function buildScheduleConfigJson(
   return null;
 }
 
-/** Build JSON to store from UI (DAILY, WEEKLY_MULTI, SPECIFIC_DATES, TEST_MINUTES). */
+/** Build JSON to store from UI (DAILY, WEEKLY_MULTI, SPECIFIC_DATES, CUSTOM_DATETIMES). */
 export function toStoredScheduleConfig(
   cadence: CampaignCadence,
   daysOfWeekMulti: number[],
   specificDates: string[],
-  testDatetimes: string[] = []
+  scheduledDatetimes: string[] = []
 ): Prisma.InputJsonValue | null {
-  const o = buildScheduleConfigJson(cadence, daysOfWeekMulti, specificDates, testDatetimes);
+  const o = buildScheduleConfigJson(cadence, daysOfWeekMulti, specificDates, scheduledDatetimes);
   if (o == null) return null;
   return o as Prisma.InputJsonValue;
 }

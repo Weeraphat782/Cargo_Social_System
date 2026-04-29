@@ -9,25 +9,16 @@ import { buildScheduleConfigJson } from "@/lib/campaigns/schedule-config";
 
 const DOW_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-const BASE_CADENCE_OPTIONS: { v: CampaignCadence; label: string; short?: string }[] = [
+const CADENCE_OPTIONS: { v: CampaignCadence; label: string; short?: string }[] = [
   { v: "DAILY", label: "Every day" },
   { v: "WEEKLY_MULTI", label: "Every week", short: "Pick day(s)" },
   { v: "WEEKLY", label: "Every week (one day)" },
   { v: "BIWEEKLY", label: "Every 2 weeks" },
   { v: "MONTHLY", label: "Monthly" },
   { v: "SPECIFIC_DATES", label: "Specific dates" },
+  { v: "CUSTOM_DATETIMES", label: "Custom date & times", short: "Minute precision" },
   { v: "CUSTOM", label: "Custom (weekly fallback)" },
 ];
-
-const DEV_CADENCE_OPTION: { v: CampaignCadence; label: string } = {
-  v: "TEST_MINUTES",
-  label: "Every few minutes (test)",
-};
-
-function cadenceOptions(): { v: CampaignCadence; label: string; short?: string }[] {
-  if (process.env.NODE_ENV === "production") return BASE_CADENCE_OPTIONS;
-  return [...BASE_CADENCE_OPTIONS, DEV_CADENCE_OPTION];
-}
 
 export type ScheduleEditorValue = {
   cadence: CampaignCadence;
@@ -36,8 +27,8 @@ export type ScheduleEditorValue = {
   timezone: string;
   daysOfWeekMulti: number[];
   specificDates: string[];
-  /** TEST_MINUTES: wall times in campaign TZ, format YYYY-MM-DDTHH:mm */
-  testDatetimes: string[];
+  /** CUSTOM_DATETIMES: wall times in campaign TZ, format YYYY-MM-DDTHH:mm */
+  scheduledDatetimes: string[];
   /** Last day the campaign is allowed to run, YYYY-MM-DD in `timezone`, or null = no end */
   runUntilYmd: string | null;
 };
@@ -116,12 +107,12 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const runPreview = useCallback(async () => {
-    const testDatetimes = value.testDatetimes ?? [];
+    const scheduledDatetimes = value.scheduledDatetimes ?? [];
     const sc = buildScheduleConfigJson(
       cadence,
       daysOfWeekMulti,
       specificDates,
-      testDatetimes
+      scheduledDatetimes
     );
     const endAt =
       value.runUntilYmd?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(value.runUntilYmd.trim())
@@ -142,7 +133,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
           (cadence === "DAILY" ||
             cadence === "WEEKLY_MULTI" ||
             cadence === "SPECIFIC_DATES" ||
-            cadence === "TEST_MINUTES")
+            cadence === "CUSTOM_DATETIMES")
             ? sc
             : null,
       }),
@@ -158,7 +149,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
     timezone,
     daysOfWeekMulti,
     specificDates,
-    value.testDatetimes,
+    value.scheduledDatetimes,
     value.runUntilYmd,
   ]);
 
@@ -190,20 +181,20 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
 
   const cells = listMonthCells(view.y, view.m, timezone);
 
-  const testDatetimes = value.testDatetimes ?? [];
+  const scheduledDatetimes = value.scheduledDatetimes ?? [];
 
   const appendQuickMins = (n: number) => {
     const raw = formatInTimeZone(addMinutes(new Date(), n), timezone, "yyyy-MM-dd'T'HH:mm");
-    const next = [...new Set([...testDatetimes, raw])].sort();
-    onChange({ testDatetimes: next });
+    const next = [...new Set([...scheduledDatetimes, raw])].sort();
+    onChange({ scheduledDatetimes: next });
   };
 
   const addManualSlot = () => {
     const tPart = manualTime.length >= 5 ? manualTime.slice(0, 5) : manualTime;
     const raw = `${manualDate}T${tPart}`;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return;
-    const next = [...new Set([...testDatetimes, raw])].sort();
-    onChange({ testDatetimes: next });
+    const next = [...new Set([...scheduledDatetimes, raw])].sort();
+    onChange({ scheduledDatetimes: next });
   };
 
   return (
@@ -217,7 +208,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
             gap: 6,
           }}
         >
-          {cadenceOptions().map((opt) => (
+          {CADENCE_OPTIONS.map((opt) => (
             <button
               key={opt.v}
               type="button"
@@ -228,10 +219,10 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
                   onChange({ cadence: opt.v, daysOfWeekMulti: [value.dayOfWeek] });
                 } else if (opt.v === "SPECIFIC_DATES") {
                   onChange({ cadence: opt.v, specificDates: value.specificDates.length ? value.specificDates : [] });
-                } else if (opt.v === "TEST_MINUTES") {
+                } else if (opt.v === "CUSTOM_DATETIMES") {
                   onChange({
                     cadence: opt.v,
-                    testDatetimes: value.testDatetimes?.length ? value.testDatetimes : [],
+                    scheduledDatetimes: value.scheduledDatetimes?.length ? value.scheduledDatetimes : [],
                   });
                 } else {
                   onChange({ cadence: opt.v });
@@ -284,11 +275,11 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: cadence === "TEST_MINUTES" ? "1fr" : "1fr 1fr",
+          gridTemplateColumns: cadence === "CUSTOM_DATETIMES" ? "1fr" : "1fr 1fr",
           gap: 10,
         }}
       >
-        {cadence !== "TEST_MINUTES" && (
+        {cadence !== "CUSTOM_DATETIMES" && (
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
             Hour (0–23)
             <input
@@ -381,15 +372,16 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
         </label>
       </div>
 
-      {cadence === "TEST_MINUTES" && (
+      {cadence === "CUSTOM_DATETIMES" && (
         <div
           className="omg-card"
           style={{ padding: 12, background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
         >
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Test run times (minute precision)</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Scheduled times (minute precision)</div>
           <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.45 }}>
-            Dev-only. Campaign auto-completes after the last slot fires. Times are in the campaign timezone
-            above.
+            Use in production: list exact wall-clock times in the campaign timezone (YYYY-MM-DD HH:mm). The campaign
+            completes after the last slot runs; ensure your cron (e.g. <code>/api/cron/tick</code>) runs often enough
+            to pick up each slot.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {([5, 10, 15, 30] as const).map((n) => (
@@ -427,20 +419,20 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
               Add
             </button>
           </div>
-          {testDatetimes.length > 0 && (
+          {scheduledDatetimes.length > 0 && (
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
               <button
                 type="button"
                 className="omg-btn-ghost"
                 style={{ fontSize: 11, padding: "4px 8px", color: "var(--danger)" }}
-                onClick={() => onChange({ testDatetimes: [] })}
+                onClick={() => onChange({ scheduledDatetimes: [] })}
               >
                 Clear all
               </button>
             </div>
           )}
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
-            {[...testDatetimes]
+            {[...scheduledDatetimes]
               .sort()
               .map((t) => (
                 <li key={t} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -450,7 +442,7 @@ export function CampaignScheduleEditor({ value, onChange, idPrefix = "sched" }: 
                     className="omg-btn-ghost"
                     style={{ fontSize: 16, lineHeight: 1, padding: "0 6px", color: "var(--danger)" }}
                     title="Remove"
-                    onClick={() => onChange({ testDatetimes: testDatetimes.filter((x) => x !== t) })}
+                    onClick={() => onChange({ scheduledDatetimes: scheduledDatetimes.filter((x) => x !== t) })}
                   >
                     ×
                   </button>
@@ -585,7 +577,7 @@ export function defaultScheduleValue(): ScheduleEditorValue {
     timezone: "Asia/Bangkok",
     daysOfWeekMulti: [1, 3, 5],
     specificDates: [],
-    testDatetimes: [],
+    scheduledDatetimes: [],
     runUntilYmd: null,
   };
 }

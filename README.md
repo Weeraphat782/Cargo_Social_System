@@ -52,12 +52,24 @@ Human-in-the-loop social media manager: **Gemini** drafts multi-platform copy (s
 
 5. **Meta (Facebook Page + Instagram Business)**
 
+   **OAuth (recommended)**
+
+   - Create a Meta app → add **Facebook Login** and **Instagram** products.
+   - Under **Facebook Login → Settings**, add **Valid OAuth Redirect URIs**: exactly `META_REDIRECT_URI` from `.env` (e.g. `http://localhost:3000/api/oauth/meta/callback` in dev; production must use `https://your-domain.com/api/oauth/meta/callback`).
+   - Set `META_APP_ID`, `META_APP_SECRET`, and `META_REDIRECT_URI` in `.env`.
+   - Request permissions used by the app: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`, `instagram_content_publish`. Instagram publishing often requires **App Review** for production; development uses testers/admins on the app.
+   - Open **Settings → Connections → Connect with Facebook (Page + IG)** while logged into the dashboard. The server exchanges the authorization code for tokens, extends to a **long-lived user token**, loads Page tokens from **`GET /me/accounts`**, and resolves **Instagram Business Account ID** from the linked Page. Credentials are stored encrypted; Instagram uses the **same Page access token** as Facebook (Graph API).
+   - Optional: schedule **`GET /api/cron/meta-oauth-refresh`** (same `CRON_SECRET` as other cron routes) to rotate tokens before the ~60-day user-token expiry when OAuth was used.
+
+   **Manual tokens (fallback)**
+
    - Use a **Facebook Page** (not a personal profile) and an **Instagram Business/Creator** account linked to that page.
-   - Create a Meta app, add **Facebook Login** / **Instagram** products, request `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`, `pages_read_engagement`.
-   - Use a **Page access token** from this flow—not a personal **user** access token. Legacy user permission **`publish_actions` is deprecated**; Graph API may error (#200) if the token was issued for the wrong scopes or account type.
-   - Obtain a long-lived **Page** token with those permissions (Meta Business Suite → your Page → **See profiles**, **Business integrations**, or **Graph API Explorer** scoped to the Page).
+   - Legacy user permission **`publish_actions` is deprecated**; Graph API may error (#200) if the token was issued for the wrong scopes or account type.
+   - Obtain a long-lived **Page** token with those permissions (Meta Business Suite → your Page → integrations, or Graph API Explorer scoped to the Page).
    - Use **Graph API** to confirm **Page ID** and **Instagram Business Account ID** (`GET /{page-id}?fields=instagram_business_account`).
-   - Enter **Page access token**, **Page ID**, and **IG User ID** under **Connections** in the app (stored encrypted).
+   - Paste **Page access token**, **Page ID**, and **IG User ID** under **Connections**. Manual saves clear OAuth expiry hints — use OAuth again if you need automatic expiry tracking.
+
+   Short-lived or expired tokens produce Graph **`#190`** (invalid/expired session); prefer OAuth or long-lived Page tokens from Meta tools.
 
 6. **LinkedIn**
 
