@@ -5,11 +5,11 @@ const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
 async function createCarouselItem(
   igUserId: string,
-  pageAccessToken: string,
+  token: string,
   imageUrl: string
 ): Promise<string> {
   const url = new URL(`${GRAPH_BASE}/${igUserId}/media`);
-  url.searchParams.set("access_token", pageAccessToken);
+  url.searchParams.set("access_token", token);
   url.searchParams.set("image_url", imageUrl);
   url.searchParams.set("is_carousel_item", "true");
 
@@ -25,19 +25,26 @@ async function createCarouselItem(
  * Instagram Graph API: create media container then publish.
  * Single image → standard image post
  * Multiple images → carousel (CAROUSEL container with children)
+ *
+ * Uses userAccessToken when available — instagram_content_publish is granted on the
+ * user token during OAuth; page tokens don't always inherit it for IG publishing.
+ *
  * @see https://developers.facebook.com/docs/instagram-api/guides/content-publishing
  */
 export async function publishInstagram(
   igUserId: string,
   pageAccessToken: string,
-  input: PublishInput
+  input: PublishInput,
+  userAccessToken?: string
 ): Promise<PublishResult> {
   const { imageUrls, caption } = input;
   const base = `${GRAPH_BASE}/${igUserId}`;
+  // Prefer user token: instagram_content_publish is granted at the user level
+  const token = userAccessToken ?? pageAccessToken;
 
   if (imageUrls.length <= 1) {
     const create = new URL(`${base}/media`);
-    create.searchParams.set("access_token", pageAccessToken);
+    create.searchParams.set("access_token", token);
     create.searchParams.set("image_url", imageUrls[0] ?? "");
     create.searchParams.set("caption", caption);
 
@@ -48,7 +55,7 @@ export async function publishInstagram(
     }
 
     const publish = new URL(`${base}/media_publish`);
-    publish.searchParams.set("access_token", pageAccessToken);
+    publish.searchParams.set("access_token", token);
     publish.searchParams.set("creation_id", j1.id);
 
     const r2 = await fetch(publish.toString(), { method: "POST" });
@@ -60,11 +67,11 @@ export async function publishInstagram(
   }
 
   const itemIds = await Promise.all(
-    imageUrls.map((url) => createCarouselItem(igUserId, pageAccessToken, url))
+    imageUrls.map((url) => createCarouselItem(igUserId, token, url))
   );
 
   const carousel = new URL(`${base}/media`);
-  carousel.searchParams.set("access_token", pageAccessToken);
+  carousel.searchParams.set("access_token", token);
   carousel.searchParams.set("media_type", "CAROUSEL");
   carousel.searchParams.set("children", itemIds.join(","));
   carousel.searchParams.set("caption", caption);
@@ -76,7 +83,7 @@ export async function publishInstagram(
   }
 
   const publish = new URL(`${base}/media_publish`);
-  publish.searchParams.set("access_token", pageAccessToken);
+  publish.searchParams.set("access_token", token);
   publish.searchParams.set("creation_id", jc.id);
 
   const rp = await fetch(publish.toString(), { method: "POST" });

@@ -205,15 +205,25 @@ export function QueuePublishedPostCard({
                                 <PlatformPill platform={v.platform} size={11} />
                               </span>
                             </div>
-                            {v.media[0]?.imageUrl && (
-                              <div style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
-                                <Image
-                                  src={v.media[0].imageUrl}
-                                  alt=""
-                                  fill
-                                  style={{ objectFit: "cover" }}
-                                />
-                              </div>
+                            {v.media.length > 0 && (
+                              v.media.length === 1 ? (
+                                <div style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                                  <Image src={v.media[0].imageUrl} alt="" fill style={{ objectFit: "cover" }} />
+                                </div>
+                              ) : (
+                                <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 10, borderRadius: 8, scrollSnapType: "x mandatory" }}>
+                                  {v.media.map((m, i) => (
+                                    <div key={m.id} style={{ position: "relative", flexShrink: 0, width: 110, height: 110, borderRadius: 6, overflow: "hidden", scrollSnapAlign: "start" }}>
+                                      <Image src={m.imageUrl} alt={`Image ${i + 1}`} fill style={{ objectFit: "cover" }} />
+                                      {i === 0 && (
+                                        <span style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, fontWeight: 600, borderRadius: 4, padding: "1px 5px" }}>
+                                          {v.media.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )
                             )}
                             {v.platform === "OMG" && (
                               <>

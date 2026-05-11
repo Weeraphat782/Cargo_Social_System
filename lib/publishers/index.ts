@@ -20,7 +20,7 @@ export async function publishPostVariant(
     }
     case "INSTAGRAM": {
       const meta = await getMetaTokens();
-      const r = await publishInstagram(meta.igUserId, meta.pageAccessToken, input);
+      const r = await publishInstagram(meta.igUserId, meta.pageAccessToken, input, meta.userAccessToken);
       return { remoteId: r.remoteId };
     }
     case "LINKEDIN": {
