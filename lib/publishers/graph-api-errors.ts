@@ -37,7 +37,10 @@ export function formatGraphPublishError(
   }
   let msg = `${platform}${stepLabel}: ${e.message}`;
   if (e.code != null) {
-    msg += ` (#${e.code})`;
+    msg += ` (#${e.code}${e.error_subcode != null ? `/${e.error_subcode}` : ""})`;
+  }
+  if (e.fbtrace_id) {
+    msg += ` [trace:${e.fbtrace_id}]`;
   }
   const hint = metaPermissionHint(e.message);
   if (hint) {
