@@ -113,6 +113,21 @@ export async function fetchInstagramBusinessAccountId(params: {
   return id ? id : null;
 }
 
+/** Fallback for Business Suite admins: fetch page token directly by Page ID using the user token. */
+export async function fetchPageByIdWithUserToken(params: {
+  pageId: string;
+  userAccessToken: string;
+}): Promise<PageAccountRow | null> {
+  const url = new URL(`${GRAPH_BASE}/${params.pageId}`);
+  url.searchParams.set("fields", "id,name,access_token,instagram_business_account");
+  url.searchParams.set("access_token", params.userAccessToken);
+
+  const res = await fetch(url.toString(), { method: "GET" });
+  const json = (await res.json()) as GraphErrorBody & PageAccountRow;
+  if (!res.ok || !json.id) return null;
+  return { id: json.id, name: json.name, access_token: json.access_token, instagram_business_account: json.instagram_business_account };
+}
+
 /**
  * Prefer a Page row that already exposes IG linkage; otherwise the first Page with access_token.
  */

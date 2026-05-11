@@ -10,6 +10,7 @@ import {
   exchangeForLongLivedUserToken,
   fetchInstagramBusinessAccountId,
   fetchMeAccounts,
+  fetchPageByIdWithUserToken,
   pickPageAccountForMeta,
 } from "@/lib/meta/oauth-graph";
 
@@ -68,7 +69,20 @@ export async function GET(req: NextRequest) {
     });
 
     const pages = await fetchMeAccounts(longTok.accessToken);
-    const picked = pickPageAccountForMeta(pages);
+    let picked = pickPageAccountForMeta(pages);
+
+    // Fallback for Business Suite admins: /me/accounts returns empty but the user token
+    // still has page access from the OAuth dialog selection. Fetch page directly by ID.
+    if (!picked?.id || !picked.access_token) {
+      const fallbackPageId = process.env.META_PAGE_ID?.trim();
+      if (fallbackPageId) {
+        const direct = await fetchPageByIdWithUserToken({
+          pageId: fallbackPageId,
+          userAccessToken: longTok.accessToken,
+        });
+        if (direct?.id && direct.access_token) picked = direct;
+      }
+    }
 
     if (!picked?.id || !picked.access_token) {
       return redirectWithClearedCookie("/settings/connections?meta=no_pages");
