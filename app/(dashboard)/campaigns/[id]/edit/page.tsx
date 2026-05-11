@@ -32,6 +32,7 @@ type CampaignLoad = {
   scheduleConfig: Prisma.JsonValue;
   platforms: CampaignFormFieldsValue["platforms"];
   postsPerRun: number;
+  imagesPerPost: number;
   totalPostsCap: number | null;
   autoApprove: boolean;
   publishHourOfDay: number | null;

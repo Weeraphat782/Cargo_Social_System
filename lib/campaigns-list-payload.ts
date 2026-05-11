@@ -45,6 +45,7 @@ export type CampaignListRowJson = {
   dayOfWeek: number | null;
   hourOfDay: number | null;
   postsPerRun: number;
+  imagesPerPost: number;
   totalPostsCap: number | null;
   customCron: string | null;
   scheduleConfig: Prisma.JsonValue;
@@ -77,6 +78,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
       dayOfWeek: true,
       hourOfDay: true,
       postsPerRun: true,
+      imagesPerPost: true,
       totalPostsCap: true,
       customCron: true,
       scheduleConfig: true,
@@ -116,6 +118,7 @@ export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]
     dayOfWeek: c.dayOfWeek,
     hourOfDay: c.hourOfDay,
     postsPerRun: c.postsPerRun,
+    imagesPerPost: c.imagesPerPost,
     totalPostsCap: c.totalPostsCap,
     customCron: c.customCron,
     scheduleConfig: c.scheduleConfig,

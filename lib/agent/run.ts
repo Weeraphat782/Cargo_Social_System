@@ -549,24 +549,27 @@ export async function runAgentForCampaign(
     const imageBrief = composeImageBrief(draft.imagePrompt, {
       paletteHint: theme.visualStyleNotes,
     });
-    let sharedImagePrompt = imageBrief;
-    let sharedImageUrl = PLACEHOLDER_PNG;
-    try {
-      const gen = await generateAndUploadImage({
-        prompt: imageBrief,
-        aspect,
-        storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}`,
-        referenceCategory: theme.referenceCategory,
-        newsContext: newsForImage,
-      });
-      sharedImageUrl = gen.imageUrl;
-      sharedImagePrompt = gen.prompt;
-    } catch (err) {
-      console.error(
-        "[agent] campaign image generation failed:",
-        err instanceof Error ? err.message : String(err)
-      );
+    const imageCount = Math.max(1, Math.min(4, campaign.imagesPerPost ?? 1));
+    const generatedImages: { url: string; prompt: string }[] = [];
+    for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+      try {
+        const gen = await generateAndUploadImage({
+          prompt: imageBrief,
+          aspect,
+          storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}-${imgIdx}`,
+          referenceCategory: theme.referenceCategory,
+          newsContext: newsForImage,
+        });
+        generatedImages.push({ url: gen.imageUrl, prompt: gen.prompt });
+      } catch (err) {
+        console.error(
+          "[agent] campaign image generation failed:",
+          err instanceof Error ? err.message : String(err)
+        );
+        if (imgIdx === 0) generatedImages.push({ url: PLACEHOLDER_PNG, prompt: imageBrief });
+      }
     }
+    if (generatedImages.length === 0) generatedImages.push({ url: PLACEHOLDER_PNG, prompt: imageBrief });
 
     const variantData: Record<
       Platform,
@@ -609,14 +612,16 @@ export async function runAgentForCampaign(
               bodyMd: v.bodyMd ?? null,
             },
           });
-          await tx.media.create({
-            data: {
-              variantId: pv.id,
-              imageUrl: sharedImageUrl,
-              prompt: sharedImagePrompt,
-              generatedBy: "gemini",
-            },
-          });
+          for (const img of generatedImages) {
+            await tx.media.create({
+              data: {
+                variantId: pv.id,
+                imageUrl: img.url,
+                prompt: img.prompt,
+                generatedBy: "gemini",
+              },
+            });
+          }
         }
         return post;
       },

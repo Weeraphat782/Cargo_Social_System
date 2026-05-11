@@ -41,6 +41,7 @@ type PatchBody = {
   customCron?: string | null;
   platforms?: Platform[];
   postsPerRun?: number;
+  imagesPerPost?: number;
   totalPostsCap?: number | null;
   autoApprove?: boolean;
   publishHourOfDay?: number | null;
@@ -228,6 +229,9 @@ export async function PATCH(
   }
   if (body.postsPerRun != null) {
     u.postsPerRun = Math.min(5, Math.max(1, body.postsPerRun));
+  }
+  if (body.imagesPerPost != null) {
+    u.imagesPerPost = Math.min(4, Math.max(1, body.imagesPerPost));
   }
   if (body.totalPostsCap !== undefined) u.totalPostsCap = body.totalPostsCap;
   if (body.autoApprove != null) u.autoApprove = body.autoApprove;

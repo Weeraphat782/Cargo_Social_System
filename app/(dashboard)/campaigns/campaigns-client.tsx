@@ -38,6 +38,7 @@ type SuggestedCampaign = {
   dayOfWeek: number;
   hourOfDay: number;
   postsPerRun: number;
+  imagesPerPost: number;
   autoApprove: boolean;
   rationale: string;
 };
@@ -63,6 +64,7 @@ type CampaignRow = {
   dayOfWeek: number | null;
   hourOfDay: number | null;
   postsPerRun: number;
+  imagesPerPost: number;
   totalPostsCap: number | null;
   customCron: string | null;
   scheduleConfig: Prisma.JsonValue;
@@ -207,6 +209,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       schedule,
       platforms,
       postsPerRun,
+      imagesPerPost,
       totalPostsCap,
       autoApprove,
     } = manualForm;
@@ -234,6 +237,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           scheduledDatetimes: schedule.scheduledDatetimes,
           platforms: platforms.length ? platforms : undefined,
           postsPerRun,
+          imagesPerPost,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : undefined,
           autoApprove,
           publishHourOfDay: manualForm.publishHourOfDay,
@@ -290,6 +294,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
       theme: s.theme,
       platforms: ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"],
       postsPerRun: s.postsPerRun,
+      imagesPerPost: 1,
       totalPostsCap: "",
       autoApprove: s.autoApprove,
       publishHourOfDay: null,
@@ -325,6 +330,7 @@ export default function CampaignsClient({ initialCampaigns }: { initialCampaigns
           scheduledDatetimes: sch.scheduledDatetimes,
           platforms: draft.platforms.length ? draft.platforms : undefined,
           postsPerRun: draft.postsPerRun,
+          imagesPerPost: draft.imagesPerPost ?? 1,
           totalPostsCap: draft.totalPostsCap ? parseInt(draft.totalPostsCap, 10) : undefined,
           autoApprove: draft.autoApprove,
           publishHourOfDay: draft.publishHourOfDay,

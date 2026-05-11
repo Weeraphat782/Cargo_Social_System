@@ -51,6 +51,7 @@ export async function POST(req: Request) {
     customCron?: string | null;
     platforms?: Platform[];
     postsPerRun?: number;
+    imagesPerPost?: number;
     totalPostsCap?: number | null;
     autoApprove?: boolean;
     publishHourOfDay?: number | null;
@@ -150,6 +151,7 @@ export async function POST(req: Request) {
     ? body.platforms
     : PLATFORMS;
   const postsPerRun = Math.min(5, Math.max(1, body.postsPerRun ?? 1));
+  const imagesPerPost = Math.min(4, Math.max(1, body.imagesPerPost ?? 1));
   const dayOfWeek = body.dayOfWeek ?? 1;
   const hourOfDay = body.hourOfDay ?? 9;
   if (typeof body.publishMinuteOfHour === "number" && body.publishHourOfDay == null) {
@@ -233,6 +235,7 @@ export async function POST(req: Request) {
       scheduleConfig,
       platforms,
       postsPerRun,
+      imagesPerPost,
       totalPostsCap: body.totalPostsCap ?? null,
       autoApprove: body.autoApprove ?? false,
       publishHourOfDay,

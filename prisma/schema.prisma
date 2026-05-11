@@ -143,6 +143,7 @@ model Campaign {
   scheduleConfig Json?
   platforms     Platform[]
   postsPerRun   Int               @default(1)
+  imagesPerPost Int               @default(1)
   totalPostsCap Int?
   autoApprove   Boolean           @default(false)
   startAt       DateTime          @default(now())

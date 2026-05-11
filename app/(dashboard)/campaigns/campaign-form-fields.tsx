@@ -31,6 +31,7 @@ export type CampaignFormFieldsValue = {
   schedule: ScheduleEditorValue;
   platforms: Platform[];
   postsPerRun: number;
+  imagesPerPost: number;
   totalPostsCap: string;
   autoApprove: boolean;
   publishHourOfDay: number | null;
@@ -67,6 +68,7 @@ export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
     schedule: defaultScheduleValue(),
     platforms: ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"],
     postsPerRun: 1,
+    imagesPerPost: 1,
     totalPostsCap: "",
     autoApprove: false,
     publishHourOfDay: null,
@@ -95,6 +97,7 @@ export function campaignToFormFieldsValue(
     | "scheduleConfig"
     | "platforms"
     | "postsPerRun"
+    | "imagesPerPost"
     | "totalPostsCap"
     | "autoApprove"
     | "publishHourOfDay"
@@ -142,6 +145,7 @@ export function campaignToFormFieldsValue(
     },
     platforms: c.platforms?.length ? [...c.platforms] : [...FORM_PLATFORM_FALLBACK],
     postsPerRun: c.postsPerRun,
+    imagesPerPost: c.imagesPerPost ?? 1,
     totalPostsCap: c.totalPostsCap != null ? String(c.totalPostsCap) : "",
     autoApprove: c.autoApprove,
     publishHourOfDay: c.publishHourOfDay ?? null,
@@ -298,6 +302,7 @@ export function CampaignFormFields({
     schedule,
     platforms,
     postsPerRun,
+    imagesPerPost,
     autoApprove,
     publishHourOfDay,
     publishMinuteOfHour,
@@ -359,17 +364,32 @@ export function CampaignFormFields({
       </div>
       {layout === "manual" ? (
         <>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, maxWidth: 220 }}>
-            Posts per run
-            <input
-              className="omg-input"
-              type="number"
-              min={1}
-              max={5}
-              value={postsPerRun}
-              onChange={(e) => onChange({ postsPerRun: parseInt(e.target.value, 10) || 1 })}
-            />
-          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+              Posts per run
+              <input
+                className="omg-input"
+                type="number"
+                min={1}
+                max={5}
+                value={postsPerRun}
+                onChange={(e) => onChange({ postsPerRun: parseInt(e.target.value, 10) || 1 })}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+              Images per post
+              <input
+                className="omg-input"
+                type="number"
+                min={1}
+                max={4}
+                value={imagesPerPost}
+                onChange={(e) =>
+                  onChange({ imagesPerPost: Math.max(1, Math.min(4, parseInt(e.target.value, 10) || 1)) })
+                }
+              />
+            </label>
+          </div>
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
             <input
               type="checkbox"
@@ -472,6 +492,19 @@ export function CampaignFormFields({
                 onChange({
                   postsPerRun: Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 1)),
                 })
+              }
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+            Images per post
+            <input
+              className="omg-input"
+              type="number"
+              min={1}
+              max={4}
+              value={imagesPerPost}
+              onChange={(e) =>
+                onChange({ imagesPerPost: Math.max(1, Math.min(4, parseInt(e.target.value, 10) || 1)) })
               }
             />
           </label>
