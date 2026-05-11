@@ -1,11 +1,11 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import Image from "next/image";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
 import type { RefCategory } from "./queue-shared";
 import { platformMeta, sortByPlatform, statusBadge, type SetPending } from "./queue-shared";
-import { PlatformIcon, PlatformPill } from "@/components/ui";
+import { PlatformIcon, PlatformPill, ImageLightbox } from "@/components/ui";
 
 export type QueueInteractivePostCardProps = {
   post: Post;
@@ -70,11 +70,13 @@ export function QueueInteractivePostCard({
   openScheduleModal,
   publishVariant,
 }: QueueInteractivePostCardProps) {
+            const [lightbox, setLightbox] = useState<{ images: string[]; idx: number } | null>(null);
             const thumbUrl =
               post.variants.map((v) => v.media[0]?.imageUrl).find(Boolean) ?? null;
             const ex = (post.variants[0]?.caption || post.sourceNews?.title || "").trim();
             const excerpt = ex.length > 180 ? `${ex.slice(0, 180)}…` : ex;
             return (
+            <>
             <div className="omg-card is-interactive" style={{ overflow: "hidden" }}>
               <div
                 role="button"
@@ -270,7 +272,10 @@ export function QueueInteractivePostCard({
 
                         {v.media.length > 0 && (
                           v.media.length === 1 ? (
-                            <div style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                            <div
+                              onClick={(e) => { e.stopPropagation(); setLightbox({ images: v.media.map(m => m.imageUrl), idx: 0 }); }}
+                              style={{ position: "relative", width: "100%", height: 140, borderRadius: 8, overflow: "hidden", marginBottom: 10, cursor: "zoom-in" }}
+                            >
                               <Image
                                 src={v.media[0].imageUrl}
                                 alt=""
@@ -281,7 +286,11 @@ export function QueueInteractivePostCard({
                           ) : (
                             <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 10, borderRadius: 8, scrollSnapType: "x mandatory" }}>
                               {v.media.map((m, i) => (
-                                <div key={m.id} style={{ position: "relative", flexShrink: 0, width: 110, height: 110, borderRadius: 6, overflow: "hidden", scrollSnapAlign: "start" }}>
+                                <div
+                                  key={m.id}
+                                  onClick={(e) => { e.stopPropagation(); setLightbox({ images: v.media.map(x => x.imageUrl), idx: i }); }}
+                                  style={{ position: "relative", flexShrink: 0, width: 110, height: 110, borderRadius: 6, overflow: "hidden", scrollSnapAlign: "start", cursor: "zoom-in" }}
+                                >
                                   <Image src={m.imageUrl} alt={`Image ${i + 1}`} fill style={{ objectFit: "cover" }} />
                                   {i === 0 && (
                                     <span style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, fontWeight: 600, borderRadius: 4, padding: "1px 5px" }}>
@@ -766,5 +775,13 @@ export function QueueInteractivePostCard({
                 </div>
               )}
             </div>
+            {lightbox && (
+              <ImageLightbox
+                images={lightbox.images}
+                initialIndex={lightbox.idx}
+                onClose={() => setLightbox(null)}
+              />
+            )}
+            </>
             );
 }

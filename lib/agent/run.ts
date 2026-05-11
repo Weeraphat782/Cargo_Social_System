@@ -550,11 +550,21 @@ export async function runAgentForCampaign(
       paletteHint: theme.visualStyleNotes,
     });
     const imageCount = Math.max(1, Math.min(4, campaign.imagesPerPost ?? 1));
+    const COMPOSITION_ANGLES = [
+      "Wide establishing shot — show the full scene and environment.",
+      "Mid-shot — focus on the main subject or key element.",
+      "Close-up or detail shot — emphasise texture, emotion, or a specific element.",
+      "Alternative angle or fresh perspective on the same subject.",
+    ];
     const generatedImages: { url: string; prompt: string }[] = [];
     for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+      const variantBrief =
+        imageCount > 1
+          ? `${imageBrief}\n\nComposition (image ${imgIdx + 1} of ${imageCount}): ${COMPOSITION_ANGLES[imgIdx] ?? COMPOSITION_ANGLES[0]}`
+          : imageBrief;
       try {
         const gen = await generateAndUploadImage({
-          prompt: imageBrief,
+          prompt: variantBrief,
           aspect,
           storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}-${imgIdx}`,
           referenceCategory: theme.referenceCategory,

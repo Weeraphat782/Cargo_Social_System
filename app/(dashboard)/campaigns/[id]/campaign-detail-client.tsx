@@ -8,7 +8,7 @@ import { FileStack } from "lucide-react";
 import type { CampaignStatus } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
-import { CountdownRing, PageHeader, ProgressBar } from "@/components/ui";
+import { CountdownRing, ImageLightbox, PageHeader, ProgressBar } from "@/components/ui";
 import { type CampaignDetailData } from "@/lib/campaigns-detail-payload";
 
 const platformMeta: Record<string, { label: string; cls: string }> = {
@@ -49,6 +49,7 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
   const [activePlatformTab, setActivePlatformTab] = useState<Record<string, string>>({});
   const [captionExpanded, setCaptionExpanded] = useState<Record<string, boolean>>({});
   const [actioning, setActioning] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ images: string[]; idx: number } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/campaigns/${id}`);
@@ -165,6 +166,7 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
   });
 
   return (
+    <>
     <div>
       <div style={{ marginBottom: 12 }}>
         <Link href="/campaigns" style={{ fontSize: 12, color: "var(--accent)" }}>
@@ -526,26 +528,32 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
                         )}
                       </div>
                     )}
-                    {v.media[0]?.imageUrl ? (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: 220,
-                          position: "relative",
-                          borderRadius: 8,
-                          overflow: "hidden",
-                          marginBottom: 10,
-                        }}
-                      >
-                        <Image
-                          src={v.media[0].imageUrl}
-                          alt=""
-                          fill
-                          style={{
-                            objectFit: "cover",
-                          }}
-                        />
-                      </div>
+                    {v.media.length > 0 ? (
+                      v.media.length === 1 ? (
+                        <div
+                          onClick={() => setLightbox({ images: v.media.map(m => m.imageUrl), idx: 0 })}
+                          style={{ width: "100%", height: 220, position: "relative", borderRadius: 8, overflow: "hidden", marginBottom: 10, cursor: "zoom-in" }}
+                        >
+                          <Image src={v.media[0].imageUrl} alt="" fill style={{ objectFit: "cover" }} />
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 10, borderRadius: 8, scrollSnapType: "x mandatory" }}>
+                          {v.media.map((m, i) => (
+                            <div
+                              key={m.id}
+                              onClick={() => setLightbox({ images: v.media.map(x => x.imageUrl), idx: i })}
+                              style={{ position: "relative", flexShrink: 0, width: 140, height: 140, borderRadius: 6, overflow: "hidden", scrollSnapAlign: "start", cursor: "zoom-in" }}
+                            >
+                              <Image src={m.imageUrl} alt={`Image ${i + 1}`} fill style={{ objectFit: "cover" }} />
+                              {i === 0 && (
+                                <span style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, fontWeight: 600, borderRadius: 4, padding: "1px 5px" }}>
+                                  {v.media.length}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )
                     ) : (
                       <div
                         style={{
@@ -658,5 +666,13 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
         </div>
       )}
     </div>
+    {lightbox && (
+      <ImageLightbox
+        images={lightbox.images}
+        initialIndex={lightbox.idx}
+        onClose={() => setLightbox(null)}
+      />
+    )}
+    </>
   );
 }

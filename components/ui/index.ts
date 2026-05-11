@@ -7,3 +7,4 @@ export { StatCard } from "./stat-card";
 export { MotionList } from "./motion-list";
 export { CollapsibleSection } from "./collapsible-section";
 export { PlatformIcon, PlatformPill } from "./platform-icon";
+export { ImageLightbox } from "./image-lightbox";
