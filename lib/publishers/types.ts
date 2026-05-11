@@ -2,7 +2,7 @@ import type { Platform } from "@prisma/client";
 
 export type PublishInput = {
   caption: string;
-  imageUrl: string;
+  imageUrls: string[];
   /** OMG-only */
   title?: string;
   bodyMd?: string;

@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const tokens = await getLinkedInTokens();
     const result = await publishLinkedInUgc(tokens.accessToken, tokens.personUrn, {
       caption,
-      imageUrl,
+      imageUrls: [imageUrl],
     });
 
     const remoteId = result.remoteId;

@@ -28,11 +28,10 @@ export function formatGraphPublishError(
   platform: "Facebook" | "Instagram",
   status: number,
   json: GraphApiErrorJson,
-  step?: "create_media" | "publish"
+  step?: string
 ): string {
   const e = json.error;
-  const stepLabel =
-    step === "create_media" ? " (create media)" : step === "publish" ? " (publish)" : "";
+  const stepLabel = step ? ` (${step.replace(/_/g, " ")})` : "";
   if (!e?.message) {
     return `${platform}${stepLabel}: HTTP ${status}`;
   }

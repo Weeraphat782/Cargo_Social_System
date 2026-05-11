@@ -1,38 +1,29 @@
 import type { PublishInput, PublishResult } from "./types";
 
-/**
- * LinkedIn UGC Posts with shareMediaCategory IMAGE.
- * Flow: registerUpload -> PUT image -> ugcPosts
- * @see https://learn.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/ugc-post-api
- */
-export async function publishLinkedInUgc(
+const LI_API = "https://api.linkedin.com/v2";
+const HEADERS_BASE = {
+  "Content-Type": "application/json",
+  "X-Restli-Protocol-Version": "2.0.0",
+};
+
+async function registerAndUploadImage(
   accessToken: string,
   authorUrn: string,
-  input: PublishInput
-): Promise<PublishResult> {
-  const regRes = await fetch(
-    "https://api.linkedin.com/v2/assets?action=registerUpload",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
+  imageUrl: string
+): Promise<string> {
+  const regRes = await fetch(`${LI_API}/assets?action=registerUpload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, ...HEADERS_BASE },
+    body: JSON.stringify({
+      registerUploadRequest: {
+        recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+        owner: authorUrn,
+        serviceRelationships: [
+          { relationshipType: "OWNER", identifier: "urn:li:userGeneratedContent" },
+        ],
       },
-      body: JSON.stringify({
-        registerUploadRequest: {
-          recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
-          owner: authorUrn,
-          serviceRelationships: [
-            {
-              relationshipType: "OWNER",
-              identifier: "urn:li:userGeneratedContent",
-            },
-          ],
-        },
-      }),
-    }
-  );
+    }),
+  });
 
   const reg = (await regRes.json()) as {
     value?: {
@@ -59,12 +50,12 @@ export async function publishLinkedInUgc(
     throw new Error("LinkedIn registerUpload: missing upload URL or asset");
   }
 
-  const imgRes = await fetch(input.imageUrl);
+  const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) throw new Error(`Failed to download image for LinkedIn: ${imgRes.status}`);
   const buf = Buffer.from(await imgRes.arrayBuffer());
   let contentType = imgRes.headers.get("content-type")?.split(";")[0]?.trim();
   if (!contentType || contentType === "application/octet-stream") {
-    const m = input.imageUrl.match(/^data:([^;,]+)/);
+    const m = imageUrl.match(/^data:([^;,]+)/);
     contentType = m?.[1]?.trim() || "image/png";
   }
 
@@ -78,20 +69,31 @@ export async function publishLinkedInUgc(
     throw new Error(`LinkedIn image upload failed: ${putRes.status} ${t}`);
   }
 
-  const shareText = input.caption.slice(0, 3000);
+  return assetUrn;
+}
+
+/**
+ * LinkedIn UGC Posts with shareMediaCategory IMAGE.
+ * Supports single and multi-image posts.
+ * @see https://learn.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/ugc-post-api
+ */
+export async function publishLinkedInUgc(
+  accessToken: string,
+  authorUrn: string,
+  input: PublishInput
+): Promise<PublishResult> {
+  const assetUrns = await Promise.all(
+    input.imageUrls.map((url) => registerAndUploadImage(accessToken, authorUrn, url))
+  );
+
   const ugcBody = {
     author: authorUrn,
     lifecycleState: "PUBLISHED",
     specificContent: {
       "com.linkedin.ugc.ShareContent": {
-        shareCommentary: { text: shareText },
+        shareCommentary: { text: input.caption.slice(0, 3000) },
         shareMediaCategory: "IMAGE",
-        media: [
-          {
-            status: "READY",
-            media: assetUrn,
-          },
-        ],
+        media: assetUrns.map((assetUrn) => ({ status: "READY", media: assetUrn })),
       },
     },
     visibility: {
@@ -99,13 +101,9 @@ export async function publishLinkedInUgc(
     },
   };
 
-  const postRes = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+  const postRes = await fetch(`${LI_API}/ugcPosts`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "X-Restli-Protocol-Version": "2.0.0",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, ...HEADERS_BASE },
     body: JSON.stringify(ugcBody),
   });
 

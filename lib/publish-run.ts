@@ -34,14 +34,13 @@ export async function executePublishPost(postId: string): Promise<void> {
   for (const platform of platforms) {
     const v = post.variants.find((x) => x.platform === platform);
     if (!v) continue;
-    const media = v.media[0];
-    const imageUrl = media?.imageUrl ?? "";
+    const imageUrls = v.media.map((m) => m.imageUrl).filter(Boolean);
     const caption = buildCaption(platform, v.caption, v.hashtags);
 
     try {
       const { remoteId } = await publishPostVariant(platform, {
         caption,
-        imageUrl,
+        imageUrls,
         title: v.title ?? undefined,
         bodyMd: v.bodyMd ?? undefined,
         slug: v.slug ?? undefined,

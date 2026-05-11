@@ -32,7 +32,7 @@ export async function publishOmgNewsroom(input: PublishInput): Promise<PublishRe
     slug,
     summary: input.caption.slice(0, 500),
     bodyMd: input.bodyMd ?? `## ${title}\n\n${input.caption}`,
-    heroImageUrl: input.imageUrl,
+    heroImageUrl: input.imageUrls[0] ?? "",
     category: "News",
     publishedAt: new Date().toISOString(),
   };
