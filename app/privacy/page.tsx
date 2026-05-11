@@ -7,7 +7,7 @@ export default function PrivacyPage() {
       <p><strong>Last updated:</strong> May 2026</p>
 
       <p>
-        This application ("Bhutan's Marketing") is used internally by OMG Experience Co., Ltd. to manage and publish
+        This application (&quot;Bhutan&apos;s Marketing&quot;) is used internally by OMG Experience Co., Ltd. to manage and publish
         social media content on Facebook Pages and Instagram Business accounts.
       </p>
 
@@ -32,7 +32,7 @@ export default function PrivacyPage() {
       <h2>Third-Party Services</h2>
       <p>
         This application uses the Meta Graph API. Use of Facebook and Instagram is subject to
-        Meta's own privacy policy at <a href="https://www.facebook.com/privacy/policy/">facebook.com/privacy/policy</a>.
+        Meta&apos;s own privacy policy at <a href="https://www.facebook.com/privacy/policy/">facebook.com/privacy/policy</a>.
       </p>
 
       <h2>Contact</h2>
