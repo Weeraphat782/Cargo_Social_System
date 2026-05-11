@@ -102,6 +102,10 @@ export async function GET(req: NextRequest) {
         })) ?? "";
     }
 
+    if (!igUserId) {
+      igUserId = process.env.META_IG_USER_ID?.trim() ?? "";
+    }
+
     const expiresInSec = longTok.expiresInSec;
     const approxExpiryIso =
       typeof expiresInSec === "number" && expiresInSec > 0
