@@ -6,7 +6,7 @@ export const META_LOGIN_DIALOG_SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
-  "instagram_content_publish",
+  "instagram_business_content_publish",
   "read_insights",
   "instagram_manage_insights",
 ].join(",");
