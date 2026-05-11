@@ -172,6 +172,14 @@ function ConnectionsInner() {
       void loadOverview();
       return;
     }
+    if (m === "ok_no_ig") {
+      setMsg({
+        text: "Facebook Page connected. Instagram not linked yet — go to Meta Business Suite → Page Settings → Linked Accounts to connect Instagram, then reconnect here.",
+        type: "error",
+      });
+      void loadOverview();
+      return;
+    }
     if (!m) return;
     const detail =
       m === "denied"
@@ -184,9 +192,7 @@ function ConnectionsInner() {
               ? "Missing META_APP_ID / META_APP_SECRET / META_REDIRECT_URI in server env."
               : m === "no_pages"
                 ? "No Facebook Pages returned — grant Page access and ensure you manage at least one Page."
-                : m === "no_instagram"
-                  ? "No Instagram Business account linked to that Page — link IG to the Page in Meta Business Suite, then retry."
-                  : m === "graph"
+                : m === "graph"
                     ? sp.get("e") ?? "Graph API error during OAuth"
                     : `Meta OAuth error: ${m}`;
     setMsg({ text: detail.length > 420 ? `${detail.slice(0, 417)}…` : detail, type: "error" });

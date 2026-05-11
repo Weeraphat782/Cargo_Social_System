@@ -8,6 +8,8 @@ export const META_LOGIN_DIALOG_SCOPES = [
   "pages_read_engagement",
   "instagram_basic",
   "instagram_content_publish",
+  "read_insights",
+  "instagram_manage_insights",
 ].join(",");
 
 const GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_API_VERSION}`;

@@ -88,10 +88,6 @@ export async function GET(req: NextRequest) {
         })) ?? "";
     }
 
-    if (!igUserId) {
-      return redirectWithClearedCookie("/settings/connections?meta=no_instagram");
-    }
-
     const expiresInSec = longTok.expiresInSec;
     const approxExpiryIso =
       typeof expiresInSec === "number" && expiresInSec > 0
@@ -124,7 +120,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const res = NextResponse.redirect(new URL("/settings/connections?meta=ok", base));
+    // ok_no_ig = connected FB page but Instagram not linked yet (show warning in UI)
+    const successParam = igUserId ? "meta=ok" : "meta=ok_no_ig";
+    const res = NextResponse.redirect(new URL(`/settings/connections?${successParam}`, base));
     res.cookies.delete(META_OAUTH_STATE_COOKIE);
     return res;
   } catch (e) {
