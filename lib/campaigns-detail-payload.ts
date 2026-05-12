@@ -1,8 +1,9 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import { PostStatus, type Prisma } from "@prisma/client";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
 
-export async function fetchCampaignDetail(id: string) {
+async function fetchCampaignDetailImpl(id: string) {
   const [c, publishedCount, publishLogs] = await Promise.all([
     prisma.campaign.findUnique({
       where: { id },
@@ -100,5 +101,11 @@ export async function fetchCampaignDetail(id: string) {
     upcomingRuns,
   };
 }
+
+export const fetchCampaignDetail = unstable_cache(
+  fetchCampaignDetailImpl,
+  ["campaign-detail"],
+  { tags: ["campaigns"], revalidate: 30 }
+);
 
 export type CampaignDetailData = NonNullable<Awaited<ReturnType<typeof fetchCampaignDetail>>>;
