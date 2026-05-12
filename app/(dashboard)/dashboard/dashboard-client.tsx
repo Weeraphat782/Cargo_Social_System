@@ -155,6 +155,25 @@ export default function DashboardClient({
     { label: "Published", value: stats.published, href: "/logs" as const },
   ];
 
+  // Hide campaigns that have reached their post cap (progress bar full)
+  const visibleCampaigns = campaigns.filter((c) => {
+    const progress = getCampaignProgressBar({
+      totalPostsCap: c.totalPostsCap,
+      endAt: c.endAt,
+      cadence: c.cadence,
+      dayOfWeek: c.dayOfWeek,
+      hourOfDay: c.hourOfDay,
+      timezone: c.timezone,
+      startAt: c.startAt,
+      postsPerRun: c.postsPerRun,
+      customCron: c.customCron,
+      scheduleConfig: c.scheduleConfig,
+      postCount: c._count.posts,
+      publishedCount: c.publishedCount,
+    });
+    return !(progress.showBar && progress.value >= progress.max);
+  });
+
   return (
     <div style={{ width: "100%" }}>
       <PageHeader
@@ -162,6 +181,22 @@ export default function DashboardClient({
         subtitle="Campaigns, upcoming posts, and queue health at a glance."
         icon={<LayoutDashboard size={28} strokeWidth={1.75} />}
       />
+
+      {/* Stats strip — top, always visible */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 12,
+          marginBottom: 20,
+        }}
+      >
+        {statCards.map((s) => (
+          <Link key={s.label} href={s.href} style={{ textDecoration: "none", color: "inherit" }}>
+            <StatCard label={s.label} value={s.value} />
+          </Link>
+        ))}
+      </div>
 
       <div
         className="dashboard-grid"
@@ -179,7 +214,6 @@ export default function DashboardClient({
             padding: "24px 22px 28px",
             background: "var(--navy-dim)",
             borderColor: "color-mix(in srgb, var(--info) 12%, var(--border))",
-            minHeight: 320,
           }}
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
@@ -196,7 +230,11 @@ export default function DashboardClient({
                 Your campaigns
               </h2>
               <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-secondary)" }}>
-                {activeTotal === 0 ? "No active campaigns" : `${activeTotal} active`}
+                {visibleCampaigns.length === 0 && activeTotal > 0
+                  ? "All caught up!"
+                  : activeTotal === 0
+                    ? "No active campaigns"
+                    : `${activeTotal} active`}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -209,7 +247,7 @@ export default function DashboardClient({
             </div>
           </div>
 
-          {campaigns.length === 0 ? (
+          {visibleCampaigns.length === 0 ? (
             <div style={{ padding: "20px 0" }}>
               <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6, margin: "0 0 12px" }}>
                 Campaigns queue posts on your schedule: set keywords, platforms, and cadence — drafts go to the queue (or auto-approve) until they publish.
@@ -220,7 +258,7 @@ export default function DashboardClient({
             </div>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {campaigns.map((c) => {
+              {visibleCampaigns.map((c) => {
                 const progress = getCampaignProgressBar({
                   totalPostsCap: c.totalPostsCap,
                   endAt: c.endAt,
@@ -341,171 +379,9 @@ export default function DashboardClient({
             )}
           </div>
 
-          <div className="omg-card" style={{ padding: 0, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "12px 16px",
-                borderBottom: "1px solid var(--border)",
-                fontSize: 12,
-                fontWeight: 600,
-                color: "var(--text-primary)",
-              }}
-            >
-              Recent campaign runs
-            </div>
-            {recentRuns.length === 0 ? (
-              <p style={{ margin: 0, padding: "20px 16px", fontSize: 13, color: "var(--text-muted)" }}>No runs yet.</p>
-            ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {recentRuns.map((r) => (
-                  <li
-                    key={r.id}
-                    style={{
-                      padding: "10px 16px",
-                      borderBottom: "1px solid var(--border-muted)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <span
-                      title={r.ok ? "OK" : "Failed"}
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        flexShrink: 0,
-                        background: r.ok ? "var(--success)" : "var(--danger)",
-                      }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{r.campaignName}</div>
-                      <div suppressHydrationWarning style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatAgo(r.startedAt)}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="omg-card" style={{ padding: "16px" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 10 }}>Quick actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button type="button" onClick={runAllAgents} disabled={!!running} className="omg-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>
-                {running ? (
-                  <>
-                    <span className="spinner" />
-                    Running…
-                  </>
-                ) : (
-                  "Run AI for active topics"
-                )}
-              </button>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <Link href="/topics" className="omg-btn-ghost" style={{ justifyContent: "center", fontSize: 12 }}>
-                  Browse topics
-                </Link>
-                <Link href="/queue" className="omg-btn-ghost" style={{ justifyContent: "center", fontSize: 12 }}>
-                  Review queue
-                </Link>
-              </div>
-              <Link href="/logs" className="omg-btn-ghost" style={{ justifyContent: "center", fontSize: 12, width: "100%" }}>
-                Open logs
-              </Link>
-            </div>
-            {runLog && (
-              <p style={{ margin: "12px 0 0", fontSize: 12, color: running ? "var(--text-secondary)" : "var(--success)", lineHeight: 1.4 }}>
-                {runLog}
-              </p>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Lane C: Stats strip */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 12,
-          marginTop: 24,
-        }}
-      >
-        {statCards.map((s) => (
-          <Link key={s.label} href={s.href} style={{ textDecoration: "none", color: "inherit" }}>
-            <StatCard label={s.label} value={s.value} />
-          </Link>
-        ))}
-      </div>
-
-      {/* Recent topics (compact) */}
-      <div className="omg-card" style={{ padding: 0, overflow: "hidden", marginTop: 24 }}>
-        <div
-          style={{
-            padding: "14px 18px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>Recent topics</h3>
-          <Link href="/topics" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>
-            Manage all →
-          </Link>
-        </div>
-        {topics.length === 0 ? (
-          <div style={{ padding: "24px 18px", textAlign: "center" }}>
-            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 12px" }}>No topics yet. Create one to run the topic-based agent.</p>
-            <Link href="/topics" className="omg-btn-primary" style={{ fontSize: 13, padding: "8px 16px" }}>
-              Add topic
-            </Link>
-          </div>
-        ) : (
-          <div style={{ padding: "8px 12px" }}>
-            {topics.slice(0, 5).map((t) => (
-              <div
-                key={t.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 8px",
-                  borderBottom: "1px solid var(--border-muted)",
-                }}
-              >
-                <div>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: t.active ? "var(--text-primary)" : "var(--text-muted)",
-                    }}
-                  >
-                    {t.name}
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: 10 }}>{t.keywords}</span>
-                </div>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "2px 8px",
-                    borderRadius: 10,
-                    background: t.active ? "var(--success-dim)" : "var(--slate-dim)",
-                    color: t.active ? "var(--success)" : "var(--text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {t.active ? "Active" : "Paused"}
-                </span>
-              </div>
-            ))}
-            {topics.length > 5 && <p style={{ margin: 0, padding: "4px 8px 10px", fontSize: 11, color: "var(--text-muted)" }}>Showing 5 of {topics.length} topics.</p>}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
