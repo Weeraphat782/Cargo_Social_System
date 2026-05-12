@@ -29,7 +29,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OMG Social Agent",
+  title: "Postflow",
   description: "AI-powered social media management — Gemini",
 };
 

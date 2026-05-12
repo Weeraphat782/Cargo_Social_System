@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 
 const workspaceNav: {
   href: string;
@@ -109,53 +107,33 @@ function isNavActive(href: string, pathname: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-const LOGO_FULL_SRC = "/logo/logo-full.avif";
-
 function LogoLockup() {
-  const [fullErr, setFullErr] = useState(false);
-
-  if (fullErr) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: "var(--text-primary)",
-            lineHeight: 1.2,
-            fontFamily: "var(--font-bricolage, var(--font-funnel, sans-serif))",
-          }}
-        >
-          OMG Social
-        </div>
-        <div
-          style={{
-            fontSize: 10,
-            color: "var(--accent)",
-            fontWeight: 600,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            marginTop: 2,
-          }}
-        >
-          Campaign studio
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ position: "relative", width: "100%", height: 56 }}>
-      <Image
-        src={LOGO_FULL_SRC}
-        alt="OMG Social"
-        fill
-        priority
-        unoptimized
-        onError={() => setFullErr(true)}
-        style={{ objectFit: "contain", objectPosition: "left center" }}
-        sizes="160px"
-      />
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      <div
+        style={{
+          fontSize: 17,
+          fontWeight: 800,
+          color: "var(--text-primary)",
+          lineHeight: 1.15,
+          letterSpacing: "-0.02em",
+          fontFamily: "var(--font-bricolage, var(--font-funnel, sans-serif))",
+        }}
+      >
+        Postflow
+      </div>
+      <div
+        style={{
+          fontSize: 10,
+          color: "var(--accent)",
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          marginTop: 2,
+        }}
+      >
+        Campaign studio
+      </div>
     </div>
   );
 }
