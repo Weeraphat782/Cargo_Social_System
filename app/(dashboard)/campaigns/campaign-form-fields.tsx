@@ -340,20 +340,6 @@ export function CampaignFormFields({
           onChange={(e) => onChange({ brandVoice: e.target.value })}
         />
       </label>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
-        Lane
-        <select
-          className="omg-input"
-          value={theme}
-          onChange={(e) => onChange({ theme: e.target.value as CampaignTheme })}
-        >
-          {THEME_LANES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.id} — {t.label}
-            </option>
-          ))}
-        </select>
-      </label>
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Platforms</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

@@ -453,7 +453,11 @@ export async function runAgentForCampaign(
   }
 
   const template = await getBrandTemplateOrDefault(campaign.brandTemplateId);
-  const theme = await getThemeBundleForBrand(campaign.brandTemplateId, campaign.theme);
+  // Pre-load all 3 theme bundles; each post picks one at random for copy diversity.
+  const ALL_THEMES = ["RELIABILITY_PRO", "INNOVATION_TECH", "SPEED_URGENCY"] as const;
+  const allThemeBundles = await Promise.all(
+    ALL_THEMES.map((t) => getThemeBundleForBrand(campaign.brandTemplateId, t))
+  );
   const platformList: Platform[] =
     campaign.platforms.length > 0
       ? (campaign.platforms as Platform[])
@@ -507,6 +511,8 @@ export async function runAgentForCampaign(
       const count = await prisma.post.count({ where: { campaignId: campaign.id } });
       if (count >= campaign.totalPostsCap) break;
     }
+
+    const theme = allThemeBundles[Math.floor(Math.random() * allThemeBundles.length)];
 
     let draft: DraftJson;
     let sourceNewsId: string | null = null;
