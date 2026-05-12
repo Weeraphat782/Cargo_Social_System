@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PostStatus } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { executePublishPost } from "@/lib/publish-run";
@@ -23,6 +24,7 @@ export async function POST(
 
   try {
     await executePublishPost(id);
+    revalidateTag("posts");
     const updated = await prisma.post.findUnique({ where: { id } });
     return NextResponse.json(updated);
   } catch (e) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PostStatus } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 
@@ -16,5 +17,6 @@ export async function POST(
     data: { status: PostStatus.REJECTED },
   });
 
+  revalidateTag("posts");
   return NextResponse.json({ ok: true });
 }

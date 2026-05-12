@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PostStatus } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { publishPostVariant } from "@/lib/publishers";
@@ -59,6 +60,7 @@ export async function POST(
     });
 
     await reconcilePostStatus(postId);
+    revalidateTag("posts");
 
     return NextResponse.json({ ok: true, remoteId, platform: variant.platform });
   } catch (err) {

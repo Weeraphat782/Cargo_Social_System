@@ -7,6 +7,7 @@ import {
   Platform,
   PostStatus,
 } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 
 /**
@@ -54,8 +55,14 @@ export type CampaignListRowJson = {
   publishedCount: number;
 };
 
-/** Same rows as `GET /api/campaigns` (list view). */
-export async function fetchCampaignsListForPage(): Promise<CampaignListRowJson[]> {
+/** Same rows as `GET /api/campaigns` (list view). Cached 30 s; bust with revalidateTag("campaigns"). */
+export const fetchCampaignsListForPage = unstable_cache(
+  async (): Promise<CampaignListRowJson[]> => fetchCampaignsListImpl(),
+  ["campaigns-list"],
+  { tags: ["campaigns"], revalidate: 30 }
+);
+
+async function fetchCampaignsListImpl(): Promise<CampaignListRowJson[]> {
   const rows = await prisma.campaign.findMany({
     orderBy: { updatedAt: "desc" },
     select: {

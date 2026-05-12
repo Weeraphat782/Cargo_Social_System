@@ -60,6 +60,9 @@ export default function QueueClient({
     }
   }, []);
 
+  // Re-fetch on every mount so navigating back to queue always shows latest posts
+  useEffect(() => { void load({ silent: true }); }, [load]);
+
   useEffect(() => {
     void fetch("/api/references")
       .then((r) => (r.ok ? r.json() : Promise.resolve({ categories: [] })))

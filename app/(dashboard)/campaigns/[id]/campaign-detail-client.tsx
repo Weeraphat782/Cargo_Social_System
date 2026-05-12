@@ -120,7 +120,7 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
   async function remove() {
     if (!confirm("Delete this campaign?")) return;
     const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
-    if (res.ok) router.push("/campaigns");
+    if (res.ok) { router.refresh(); router.push("/campaigns"); }
   }
 
   const postsN = c.postsPerRun;

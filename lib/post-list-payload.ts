@@ -1,4 +1,5 @@
 import { PostStatus } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 
 /** Same `select` as `GET /api/posts` (list). */
@@ -103,16 +104,18 @@ function trimMediaDataUrls(
 
 /**
  * Fetches posts for queue / API; strips huge base64 data URLs from the JSON payload.
+ * Cached 30 s server-side; bust with revalidateTag("posts").
  */
-export async function fetchPostsByStatuses(
-  statuses: PostStatus[] | null,
-  take: number
-): Promise<PostListRowJson[]> {
-  const posts = await prisma.post.findMany({
-    where: statuses?.length ? { status: { in: statuses } } : undefined,
-    orderBy: { createdAt: "desc" },
-    take,
-    select: POST_LIST_SELECT,
-  });
-  return trimMediaDataUrls(posts);
-}
+export const fetchPostsByStatuses = unstable_cache(
+  async (statuses: PostStatus[] | null, take: number): Promise<PostListRowJson[]> => {
+    const posts = await prisma.post.findMany({
+      where: statuses?.length ? { status: { in: statuses } } : undefined,
+      orderBy: { createdAt: "desc" },
+      take,
+      select: POST_LIST_SELECT,
+    });
+    return trimMediaDataUrls(posts);
+  },
+  ["posts-list"],
+  { tags: ["posts"], revalidate: 30 }
+);
