@@ -47,6 +47,14 @@ export async function runDueCampaigns(): Promise<{
         continue;
       }
     }
+    // Atomic claim: set nextRunAt = null so a concurrent cron tick can't pick this up.
+    // updateMany returns count=0 if another process already claimed (nextRunAt already changed).
+    const claimed = await prisma.campaign.updateMany({
+      where: { id: campaign.id, nextRunAt: campaign.nextRunAt, status: CampaignStatus.ACTIVE },
+      data: { nextRunAt: null },
+    });
+    if (claimed.count === 0) continue;
+
     const run = await prisma.campaignRun.create({
       data: { campaignId: campaign.id },
     });
