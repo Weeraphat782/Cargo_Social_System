@@ -40,7 +40,7 @@ export async function POST(
     variant.platform === "INSTAGRAM" && variant.hashtags
       ? `${variant.caption}\n\n${variant.hashtags}`.trim()
       : variant.caption;
-  const imageUrls = variant.media.map((m) => m.imageUrl).filter(Boolean);
+  const imageUrls = variant.media.map((m) => m.imageUrl).filter((u) => u && !u.startsWith("data:"));
 
   try {
     const { remoteId } = await publishPostVariant(variant.platform, {

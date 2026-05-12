@@ -34,7 +34,7 @@ export async function executePublishPost(postId: string): Promise<void> {
   for (const platform of platforms) {
     const v = post.variants.find((x) => x.platform === platform);
     if (!v) continue;
-    const imageUrls = v.media.map((m) => m.imageUrl).filter(Boolean);
+    const imageUrls = v.media.map((m) => m.imageUrl).filter((u) => u && !u.startsWith("data:"));
     const caption = buildCaption(platform, v.caption, v.hashtags);
 
     try {
