@@ -67,6 +67,7 @@ export async function POST(req: Request) {
     testDatetimes?: string[];
     scheduledDatetimes?: string[];
     brandTemplateId?: string;
+    contentLanguage?: string;
   };
 
   let brandTemplateId = "omg";
@@ -217,6 +218,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const contentLanguage = ["en", "th"].includes(body.contentLanguage ?? "") ? body.contentLanguage! : "en";
+
   const c = await prisma.campaign.create({
     data: {
       name: body.name.trim(),
@@ -225,6 +228,7 @@ export async function POST(req: Request) {
       status,
       keywords: keywordsTrim,
       contentMode,
+      contentLanguage,
       brandVoice: body.brandVoice?.trim() || null,
       theme: body.theme,
       cadence: body.cadence,

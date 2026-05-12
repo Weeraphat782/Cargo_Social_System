@@ -22,6 +22,7 @@ type CampaignLoad = {
   brandTemplateId: string;
   keywords: string;
   contentMode: CampaignFormFieldsValue["contentMode"];
+  contentLanguage: string;
   description: string | null;
   brandVoice: string | null;
   theme: CampaignFormFieldsValue["theme"];
@@ -92,6 +93,7 @@ export default function EditCampaignPage() {
       brandTemplateId,
       keywords,
       contentMode,
+      contentLanguage,
       description,
       brandVoice,
       theme,
@@ -120,6 +122,7 @@ export default function EditCampaignPage() {
           brandTemplateId,
           keywords: keywords.trim(),
           contentMode,
+          contentLanguage,
           description: description.trim() || null,
           brandVoice: brandVoice.trim() || null,
           theme,

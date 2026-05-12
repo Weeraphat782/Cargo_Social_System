@@ -58,6 +58,7 @@ type PatchBody = {
   scheduledDatetimes?: string[];
   scheduleConfig?: Prisma.JsonValue | null;
   brandTemplateId?: string;
+  contentLanguage?: string;
 };
 
 export async function GET(
@@ -168,6 +169,9 @@ export async function PATCH(
     u.brandTemplateId = body.brandTemplateId.trim();
   }
   if (body.theme != null) u.theme = body.theme;
+  if (body.contentLanguage != null && ["en", "th"].includes(body.contentLanguage)) {
+    u.contentLanguage = body.contentLanguage;
+  }
   if (body.cadence != null) u.cadence = body.cadence;
   if (body.dayOfWeek !== undefined) u.dayOfWeek = body.dayOfWeek;
   if (body.hourOfDay !== undefined) u.hourOfDay = body.hourOfDay;

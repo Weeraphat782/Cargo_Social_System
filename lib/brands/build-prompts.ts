@@ -51,6 +51,17 @@ ${imagePromptJsonRules}
 Ground the image in the article's title and snippet, not a generic "tech logistics" look.`;
 }
 
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English",
+  th: "Thai (ภาษาไทย)",
+};
+
+function languageInstruction(contentLanguage: string): string {
+  if (contentLanguage === "en" || !contentLanguage) return "";
+  const label = LANGUAGE_LABELS[contentLanguage] ?? contentLanguage;
+  return `\nOUTPUT LANGUAGE: Write ALL captions, article body (bodyMd), and headlines in ${label}. Keep brand names, URLs, and hashtags in Latin/English script.\n`;
+}
+
 export function buildCampaignNewsDraftPrompt(
   t: BrandPromptTemplate,
   input: {
@@ -62,6 +73,7 @@ export function buildCampaignNewsDraftPrompt(
     theme: ThemeBundle;
     recentCaptions?: string[];
     recentImagePrompts?: string[];
+    contentLanguage?: string;
   },
   imagePromptJsonRules: string
 ): string {
@@ -78,6 +90,7 @@ export function buildCampaignNewsDraftPrompt(
     captionLines || imageLines
       ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
+  const langBlock = languageInstruction(input.contentLanguage ?? "en");
   return `${t.strategistTagline}
 
 CAMPAIGN (theme-driven automation): ${input.campaignName}
@@ -86,7 +99,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use ${t.orgShort} services catalog to stay factual.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${diversityBlock}
+${langBlock}${diversityBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -128,6 +141,7 @@ export function buildCampaignSelfPromoDraftPrompt(
     theme: ThemeBundle;
     recentCaptions?: string[];
     recentImagePrompts?: string[];
+    contentLanguage?: string;
   },
   imagePromptJsonRules: string
 ): string {
@@ -146,6 +160,7 @@ export function buildCampaignSelfPromoDraftPrompt(
     captionLines || imageLines
       ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
+  const langBlock = languageInstruction(input.contentLanguage ?? "en");
 
   return `${t.strategistTagline}
 
@@ -158,7 +173,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other ${t.orgShort} services from the catalog.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${diversityBlock}
+${langBlock}${diversityBlock}
 
 This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
 

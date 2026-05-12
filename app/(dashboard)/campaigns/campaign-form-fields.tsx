@@ -19,11 +19,17 @@ export const PLATFORM_OPTIONS: { v: Platform; label: string }[] = [
   { v: "OMG", label: "OMG" },
 ];
 
+export const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "th", label: "ภาษาไทย" },
+];
+
 export type CampaignFormFieldsValue = {
   name: string;
   /** Registry id: omg, acme, etc. */
   brandTemplateId: string;
   contentMode: CampaignContentMode;
+  contentLanguage: string;
   keywords: string;
   description: string;
   brandVoice: string;
@@ -62,6 +68,7 @@ export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
     brandTemplateId: "omg",
     keywords: "",
     contentMode: "NEWS_DRIVEN",
+    contentLanguage: "en",
     description: "",
     brandVoice: "",
     theme: "INNOVATION_TECH",
@@ -87,6 +94,7 @@ export function campaignToFormFieldsValue(
     | "name"
     | "keywords"
     | "contentMode"
+    | "contentLanguage"
     | "description"
     | "brandVoice"
     | "theme"
@@ -130,6 +138,7 @@ export function campaignToFormFieldsValue(
     brandTemplateId: c.brandTemplateId ?? "omg",
     keywords: c.keywords,
     contentMode: c.contentMode,
+    contentLanguage: c.contentLanguage ?? "en",
     description: c.description ?? "",
     brandVoice: c.brandVoice ?? "",
     theme: c.theme,
@@ -295,6 +304,7 @@ export function CampaignFormFields({
     name,
     brandTemplateId,
     contentMode,
+    contentLanguage,
     keywords,
     description,
     brandVoice,
@@ -433,28 +443,43 @@ export function CampaignFormFields({
           ))}
         </select>
       </label>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Content mode</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="radio"
-              name={`${idPrefix}ContentMode`}
-              checked={contentMode === "NEWS_DRIVEN"}
-              onChange={() => onChange({ contentMode: "NEWS_DRIVEN" })}
-            />
-            News / trend
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <input
-              type="radio"
-              name={`${idPrefix}ContentMode`}
-              checked={contentMode === "SELF_PROMO"}
-              onChange={() => onChange({ contentMode: "SELF_PROMO" })}
-            />
-            Self-promo
-          </label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Content mode</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 12 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="radio"
+                name={`${idPrefix}ContentMode`}
+                checked={contentMode === "NEWS_DRIVEN"}
+                onChange={() => onChange({ contentMode: "NEWS_DRIVEN" })}
+              />
+              News / trend
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="radio"
+                name={`${idPrefix}ContentMode`}
+                checked={contentMode === "SELF_PROMO"}
+                onChange={() => onChange({ contentMode: "SELF_PROMO" })}
+              />
+              Self-promo
+            </label>
+          </div>
         </div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+          Language
+          <select
+            className="omg-input"
+            value={contentLanguage}
+            onChange={(e) => onChange({ contentLanguage: e.target.value })}
+            style={{ minWidth: 130 }}
+          >
+            {LANGUAGE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
       </div>
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
         {contentMode === "NEWS_DRIVEN"

@@ -282,6 +282,7 @@ export async function draftWithGeminiForCampaign(
     theme: ThemeBundle;
     recentCaptions?: string[];
     recentImagePrompts?: string[];
+    contentLanguage?: string;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -325,6 +326,7 @@ export async function draftWithGeminiForPromoCampaign(
     theme: ThemeBundle;
     recentCaptions?: string[];
     recentImagePrompts?: string[];
+    contentLanguage?: string;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -519,6 +521,7 @@ export async function runAgentForCampaign(
           theme,
           recentCaptions,
           recentImagePrompts,
+          contentLanguage: campaign.contentLanguage,
         },
         template
       );
@@ -540,6 +543,7 @@ export async function runAgentForCampaign(
           theme,
           recentCaptions,
           recentImagePrompts,
+          contentLanguage: campaign.contentLanguage,
         },
         template
       );

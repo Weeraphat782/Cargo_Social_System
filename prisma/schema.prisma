@@ -126,6 +126,8 @@ model Campaign {
   brandVoice    String?           @db.Text
   theme         CampaignTheme
   contentMode   CampaignContentMode @default(NEWS_DRIVEN)
+  /// BCP-47 language code for generated content, e.g. "en", "th"
+  contentLanguage String            @default("en")
   cadence       CampaignCadence
   dayOfWeek     Int?
   hourOfDay     Int?
