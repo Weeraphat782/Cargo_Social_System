@@ -281,6 +281,7 @@ export async function draftWithGeminiForCampaign(
     newsSnippet: string;
     theme: ThemeBundle;
     recentCaptions?: string[];
+    recentImagePrompts?: string[];
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -323,6 +324,7 @@ export async function draftWithGeminiForPromoCampaign(
     highlightKeywords: string;
     theme: ThemeBundle;
     recentCaptions?: string[];
+    recentImagePrompts?: string[];
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -484,14 +486,17 @@ export async function runAgentForCampaign(
     results = await searchNewsWithRetry(kw, { num });
   }
 
-  // Fetch last 5 Facebook captions from this campaign to avoid repeating angles
+  // Fetch last 5 Facebook captions + image prompts to avoid repeating angles/visuals
   const recentVariants = await prisma.postVariant.findMany({
     where: { post: { campaignId: campaign.id }, platform: "FACEBOOK" },
     orderBy: { post: { createdAt: "desc" } },
     take: 5,
-    select: { caption: true },
+    select: { caption: true, media: { select: { prompt: true }, take: 1 } },
   });
   const recentCaptions = recentVariants.map((v) => v.caption).filter(Boolean);
+  const recentImagePrompts = recentVariants
+    .map((v) => v.media[0]?.prompt)
+    .filter((p): p is string => !!p);
 
   const postIds: string[] = [];
 
@@ -513,6 +518,7 @@ export async function runAgentForCampaign(
           highlightKeywords: campaign.keywords,
           theme,
           recentCaptions,
+          recentImagePrompts,
         },
         template
       );
@@ -533,6 +539,7 @@ export async function runAgentForCampaign(
           newsSnippet: top.snippet,
           theme,
           recentCaptions,
+          recentImagePrompts,
         },
         template
       );

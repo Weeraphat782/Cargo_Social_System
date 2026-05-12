@@ -61,13 +61,22 @@ export function buildCampaignNewsDraftPrompt(
     newsSnippet: string;
     theme: ThemeBundle;
     recentCaptions?: string[];
+    recentImagePrompts?: string[];
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
-  const diversityBlock =
+  const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
-      ? `\nRECENT POSTS FROM THIS CAMPAIGN (already published — do NOT repeat these angles, hooks, or image subjects):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 300)}`).join("\n")}\nChoose a FRESH angle, different hook, and visually distinct image subject.\n`
+      ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
+      : "";
+  const imageLines =
+    input.recentImagePrompts && input.recentImagePrompts.length > 0
+      ? `Recent image subjects (already used — pick a COMPLETELY DIFFERENT scene, subject, and environment):\n${input.recentImagePrompts.map((p, i) => `${i + 1}. ${p.slice(0, 200)}`).join("\n")}`
+      : "";
+  const diversityBlock =
+    captionLines || imageLines
+      ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
   return `${t.strategistTagline}
 
@@ -118,15 +127,24 @@ export function buildCampaignSelfPromoDraftPrompt(
     highlightKeywords: string;
     theme: ThemeBundle;
     recentCaptions?: string[];
+    recentImagePrompts?: string[];
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
   const focus =
     input.highlightKeywords.trim() || t.selfPromoGeneralValueProposition;
-  const diversityBlock =
+  const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
-      ? `\nRECENT POSTS FROM THIS CAMPAIGN (already published — do NOT repeat these angles, hooks, or image subjects):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 300)}`).join("\n")}\nChoose a FRESH angle, different hook, and visually distinct image subject.\n`
+      ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
+      : "";
+  const imageLines =
+    input.recentImagePrompts && input.recentImagePrompts.length > 0
+      ? `Recent image subjects (already used — pick a COMPLETELY DIFFERENT scene, subject, and environment):\n${input.recentImagePrompts.map((p, i) => `${i + 1}. ${p.slice(0, 200)}`).join("\n")}`
+      : "";
+  const diversityBlock =
+    captionLines || imageLines
+      ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
 
   return `${t.strategistTagline}
