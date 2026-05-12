@@ -570,9 +570,7 @@ export async function runAgentForCampaign(
           ? "LINKEDIN"
           : "FACEBOOK";
 
-    const imageBrief = composeImageBrief(draft.imagePrompt, {
-      paletteHint: theme.visualStyleNotes,
-    });
+    const imageBrief = composeImageBrief(draft.imagePrompt, {});
     const imageCount = Math.max(1, Math.min(4, campaign.imagesPerPost ?? 1));
     const COMPOSITION_ANGLES = [
       "Wide establishing shot — show the full scene and environment.",
