@@ -393,10 +393,14 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   try {
+    // Delete all posts first (cascades to variants, media, publish logs).
+    // Without this, posts get campaignId=null (SetNull) and linger in the queue.
+    await prisma.post.deleteMany({ where: { campaignId: id } });
     await prisma.campaign.delete({ where: { id } });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   revalidateTag("campaigns");
+  revalidateTag("posts");
   return NextResponse.json({ ok: true });
 }
