@@ -3,6 +3,31 @@ import type { PublishInput, PublishResult } from "./types";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
+/** Poll until container status is FINISHED (or throw on ERROR/EXPIRED/timeout). */
+async function waitForContainer(
+  containerId: string,
+  token: string,
+  maxWaitMs = 30_000
+): Promise<void> {
+  const deadline = Date.now() + maxWaitMs;
+  let delay = 2_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, delay));
+    const url = new URL(`${GRAPH_BASE}/${containerId}`);
+    url.searchParams.set("fields", "status_code");
+    url.searchParams.set("access_token", token);
+    const res = await fetch(url.toString());
+    const json = (await res.json()) as { status_code?: string; error?: unknown };
+    const status = json.status_code;
+    if (status === "FINISHED") return;
+    if (status === "ERROR" || status === "EXPIRED") {
+      throw new Error(`Instagram media container ${status} (id=${containerId})`);
+    }
+    delay = Math.min(delay * 1.5, 8_000);
+  }
+  throw new Error(`Instagram media container not ready after ${maxWaitMs / 1000}s`);
+}
+
 async function createCarouselItem(
   igUserId: string,
   token: string,
@@ -54,6 +79,8 @@ export async function publishInstagram(
       throw new Error(formatGraphPublishError("Instagram", r1.status, j1, "create_media"));
     }
 
+    await waitForContainer(j1.id, token);
+
     const publish = new URL(`${base}/media_publish`);
     publish.searchParams.set("access_token", token);
     publish.searchParams.set("creation_id", j1.id);
@@ -81,6 +108,8 @@ export async function publishInstagram(
   if (!rc.ok || !jc.id) {
     throw new Error(formatGraphPublishError("Instagram", rc.status, jc, "create_carousel"));
   }
+
+  await waitForContainer(jc.id, token);
 
   const publish = new URL(`${base}/media_publish`);
   publish.searchParams.set("access_token", token);
