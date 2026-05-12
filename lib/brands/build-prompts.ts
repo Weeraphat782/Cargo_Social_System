@@ -60,10 +60,15 @@ export function buildCampaignNewsDraftPrompt(
     newsUrl: string;
     newsSnippet: string;
     theme: ThemeBundle;
+    recentCaptions?: string[];
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
+  const diversityBlock =
+    input.recentCaptions && input.recentCaptions.length > 0
+      ? `\nRECENT POSTS FROM THIS CAMPAIGN (already published — do NOT repeat these angles, hooks, or image subjects):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 300)}`).join("\n")}\nChoose a FRESH angle, different hook, and visually distinct image subject.\n`
+      : "";
   return `${t.strategistTagline}
 
 CAMPAIGN (theme-driven automation): ${input.campaignName}
@@ -72,7 +77,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use ${t.orgShort} services catalog to stay factual.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-
+${diversityBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -112,12 +117,17 @@ export function buildCampaignSelfPromoDraftPrompt(
     brandVoice?: string | null;
     highlightKeywords: string;
     theme: ThemeBundle;
+    recentCaptions?: string[];
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
   const focus =
     input.highlightKeywords.trim() || t.selfPromoGeneralValueProposition;
+  const diversityBlock =
+    input.recentCaptions && input.recentCaptions.length > 0
+      ? `\nRECENT POSTS FROM THIS CAMPAIGN (already published — do NOT repeat these angles, hooks, or image subjects):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 300)}`).join("\n")}\nChoose a FRESH angle, different hook, and visually distinct image subject.\n`
+      : "";
 
   return `${t.strategistTagline}
 
@@ -130,6 +140,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other ${t.orgShort} services from the catalog.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
+${diversityBlock}
 
 This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
 

@@ -280,6 +280,7 @@ export async function draftWithGeminiForCampaign(
     newsUrl: string;
     newsSnippet: string;
     theme: ThemeBundle;
+    recentCaptions?: string[];
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -321,6 +322,7 @@ export async function draftWithGeminiForPromoCampaign(
     /** Themes / services to highlight; may be empty (we still use campaign name) */
     highlightKeywords: string;
     theme: ThemeBundle;
+    recentCaptions?: string[];
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -482,6 +484,15 @@ export async function runAgentForCampaign(
     results = await searchNewsWithRetry(kw, { num });
   }
 
+  // Fetch last 5 Facebook captions from this campaign to avoid repeating angles
+  const recentVariants = await prisma.postVariant.findMany({
+    where: { post: { campaignId: campaign.id }, platform: "FACEBOOK" },
+    orderBy: { post: { createdAt: "desc" } },
+    take: 5,
+    select: { caption: true },
+  });
+  const recentCaptions = recentVariants.map((v) => v.caption).filter(Boolean);
+
   const postIds: string[] = [];
 
   for (let i = 0; i < campaign.postsPerRun; i++) {
@@ -501,6 +512,7 @@ export async function runAgentForCampaign(
           brandVoice: campaign.brandVoice,
           highlightKeywords: campaign.keywords,
           theme,
+          recentCaptions,
         },
         template
       );
@@ -520,6 +532,7 @@ export async function runAgentForCampaign(
           newsUrl: top.link,
           newsSnippet: top.snippet,
           theme,
+          recentCaptions,
         },
         template
       );
