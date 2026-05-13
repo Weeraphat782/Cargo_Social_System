@@ -283,6 +283,9 @@ export async function draftWithGeminiForCampaign(
     recentCaptions?: string[];
     recentImagePrompts?: string[];
     contentLanguage?: string;
+    campaignGoal?: string | null;
+    targetPersona?: string | null;
+    contentPillars?: string | null;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -327,6 +330,9 @@ export async function draftWithGeminiForPromoCampaign(
     recentCaptions?: string[];
     recentImagePrompts?: string[];
     contentLanguage?: string;
+    campaignGoal?: string | null;
+    targetPersona?: string | null;
+    contentPillars?: string | null;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -528,6 +534,9 @@ export async function runAgentForCampaign(
           recentCaptions,
           recentImagePrompts,
           contentLanguage: campaign.contentLanguage,
+          campaignGoal: campaign.campaignGoal,
+          targetPersona: campaign.targetPersona,
+          contentPillars: campaign.contentPillars,
         },
         template
       );
@@ -550,6 +559,9 @@ export async function runAgentForCampaign(
           recentCaptions,
           recentImagePrompts,
           contentLanguage: campaign.contentLanguage,
+          campaignGoal: campaign.campaignGoal,
+          targetPersona: campaign.targetPersona,
+          contentPillars: campaign.contentPillars,
         },
         template
       );

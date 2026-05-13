@@ -128,6 +128,12 @@ model Campaign {
   contentMode   CampaignContentMode @default(NEWS_DRIVEN)
   /// BCP-47 language code for generated content, e.g. "en", "th"
   contentLanguage String            @default("en")
+  /// e.g. "Brand Awareness", "Lead Generation", "Engagement"
+  campaignGoal        String?       @db.Text
+  /// Target audience description, pain points, goals
+  targetPersona       String?       @db.Text
+  /// Comma-separated content pillars, e.g. "Educational, Promotional, Behind the scenes"
+  contentPillars      String?       @db.Text
   cadence       CampaignCadence
   dayOfWeek     Int?
   hourOfDay     Int?

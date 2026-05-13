@@ -68,6 +68,9 @@ export async function POST(req: Request) {
     scheduledDatetimes?: string[];
     brandTemplateId?: string;
     contentLanguage?: string;
+    campaignGoal?: string | null;
+    targetPersona?: string | null;
+    contentPillars?: string | null;
   };
 
   let brandTemplateId = "omg";
@@ -222,6 +225,9 @@ export async function POST(req: Request) {
 
   const c = await prisma.campaign.create({
     data: {
+      campaignGoal: body.campaignGoal?.trim() || null,
+      targetPersona: body.targetPersona?.trim() || null,
+      contentPillars: body.contentPillars?.trim() || null,
       name: body.name.trim(),
       brandTemplateId,
       description: body.description?.trim() || null,

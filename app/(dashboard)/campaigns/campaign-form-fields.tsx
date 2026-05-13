@@ -30,6 +30,9 @@ export type CampaignFormFieldsValue = {
   brandTemplateId: string;
   contentMode: CampaignContentMode;
   contentLanguage: string;
+  campaignGoal: string;
+  targetPersona: string;
+  contentPillars: string;
   keywords: string;
   description: string;
   brandVoice: string;
@@ -69,6 +72,9 @@ export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
     keywords: "",
     contentMode: "NEWS_DRIVEN",
     contentLanguage: "en",
+    campaignGoal: "",
+    targetPersona: "",
+    contentPillars: "",
     description: "",
     brandVoice: "",
     theme: "INNOVATION_TECH",
@@ -95,6 +101,9 @@ export function campaignToFormFieldsValue(
     | "keywords"
     | "contentMode"
     | "contentLanguage"
+    | "campaignGoal"
+    | "targetPersona"
+    | "contentPillars"
     | "description"
     | "brandVoice"
     | "theme"
@@ -139,6 +148,9 @@ export function campaignToFormFieldsValue(
     keywords: c.keywords,
     contentMode: c.contentMode,
     contentLanguage: c.contentLanguage ?? "en",
+    campaignGoal: c.campaignGoal ?? "",
+    targetPersona: c.targetPersona ?? "",
+    contentPillars: c.contentPillars ?? "",
     description: c.description ?? "",
     brandVoice: c.brandVoice ?? "",
     theme: c.theme,
@@ -305,6 +317,9 @@ export function CampaignFormFields({
     brandTemplateId,
     contentMode,
     contentLanguage,
+    campaignGoal,
+    targetPersona,
+    contentPillars,
     keywords,
     description,
     brandVoice,
@@ -329,6 +344,34 @@ export function CampaignFormFields({
           rows={2}
           value={description}
           onChange={(e) => onChange({ description: e.target.value })}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+        Campaign goal
+        <input
+          className="omg-input"
+          value={campaignGoal}
+          placeholder="e.g. Brand Awareness, Lead Generation, Engagement"
+          onChange={(e) => onChange({ campaignGoal: e.target.value })}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+        Target persona
+        <textarea
+          className="omg-input"
+          rows={2}
+          value={targetPersona}
+          placeholder="e.g. CFO at mid-size logistics company — pain: cost visibility, goal: reduce freight spend"
+          onChange={(e) => onChange({ targetPersona: e.target.value })}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+        Content pillars
+        <input
+          className="omg-input"
+          value={contentPillars}
+          placeholder="e.g. Educational, Promotional, Behind the scenes"
+          onChange={(e) => onChange({ contentPillars: e.target.value })}
         />
       </label>
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>

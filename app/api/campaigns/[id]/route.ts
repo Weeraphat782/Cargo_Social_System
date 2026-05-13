@@ -59,6 +59,9 @@ type PatchBody = {
   scheduleConfig?: Prisma.JsonValue | null;
   brandTemplateId?: string;
   contentLanguage?: string;
+  campaignGoal?: string | null;
+  targetPersona?: string | null;
+  contentPillars?: string | null;
 };
 
 export async function GET(
@@ -172,6 +175,9 @@ export async function PATCH(
   if (body.contentLanguage != null && ["en", "th"].includes(body.contentLanguage)) {
     u.contentLanguage = body.contentLanguage;
   }
+  if (body.campaignGoal !== undefined) u.campaignGoal = body.campaignGoal?.trim() || null;
+  if (body.targetPersona !== undefined) u.targetPersona = body.targetPersona?.trim() || null;
+  if (body.contentPillars !== undefined) u.contentPillars = body.contentPillars?.trim() || null;
   if (body.cadence != null) u.cadence = body.cadence;
   if (body.dayOfWeek !== undefined) u.dayOfWeek = body.dayOfWeek;
   if (body.hourOfDay !== undefined) u.hourOfDay = body.hourOfDay;

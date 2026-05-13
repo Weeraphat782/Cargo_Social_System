@@ -23,6 +23,9 @@ type CampaignLoad = {
   keywords: string;
   contentMode: CampaignFormFieldsValue["contentMode"];
   contentLanguage: string;
+  campaignGoal: string | null;
+  targetPersona: string | null;
+  contentPillars: string | null;
   description: string | null;
   brandVoice: string | null;
   theme: CampaignFormFieldsValue["theme"];
@@ -94,6 +97,9 @@ export default function EditCampaignPage() {
       keywords,
       contentMode,
       contentLanguage,
+      campaignGoal,
+      targetPersona,
+      contentPillars,
       description,
       brandVoice,
       theme,
@@ -123,6 +129,9 @@ export default function EditCampaignPage() {
           keywords: keywords.trim(),
           contentMode,
           contentLanguage,
+          campaignGoal: campaignGoal.trim() || null,
+          targetPersona: targetPersona.trim() || null,
+          contentPillars: contentPillars.trim() || null,
           description: description.trim() || null,
           brandVoice: brandVoice.trim() || null,
           theme,

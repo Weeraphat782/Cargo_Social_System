@@ -74,10 +74,18 @@ export function buildCampaignNewsDraftPrompt(
     recentCaptions?: string[];
     recentImagePrompts?: string[];
     contentLanguage?: string;
+    campaignGoal?: string | null;
+    targetPersona?: string | null;
+    contentPillars?: string | null;
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
+  const strategyBlock = [
+    input.campaignGoal ? `Campaign goal: ${input.campaignGoal}` : "",
+    input.targetPersona ? `Target persona: ${input.targetPersona}` : "",
+    input.contentPillars ? `Content pillars for this run: ${input.contentPillars}` : "",
+  ].filter(Boolean).join("\n");
   const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
       ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
@@ -99,7 +107,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use ${t.orgShort} services catalog to stay factual.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${langBlock}${diversityBlock}
+${strategyBlock ? `\n${strategyBlock}\n` : ""}${langBlock}${diversityBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -142,12 +150,20 @@ export function buildCampaignSelfPromoDraftPrompt(
     recentCaptions?: string[];
     recentImagePrompts?: string[];
     contentLanguage?: string;
+    campaignGoal?: string | null;
+    targetPersona?: string | null;
+    contentPillars?: string | null;
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
   const focus =
     input.highlightKeywords.trim() || t.selfPromoGeneralValueProposition;
+  const strategyBlock = [
+    input.campaignGoal ? `Campaign goal: ${input.campaignGoal}` : "",
+    input.targetPersona ? `Target persona: ${input.targetPersona}` : "",
+    input.contentPillars ? `Content pillars for this run: ${input.contentPillars}` : "",
+  ].filter(Boolean).join("\n");
   const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
       ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
@@ -173,7 +189,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other ${t.orgShort} services from the catalog.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${langBlock}${diversityBlock}
+${strategyBlock ? `\n${strategyBlock}\n` : ""}${langBlock}${diversityBlock}
 
 This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
 
