@@ -37,6 +37,20 @@ export type SuggestCampaignCopy = {
   orgShort: string;
 };
 
+export type BrandAssets = {
+  /** Hex colour, e.g. "#0057B7" */
+  primaryColor?: string;
+  secondaryColor?: string;
+  /** Typeface description, e.g. "Geist Sans, clean modern" */
+  typography?: string;
+  /** Visual art direction for image generation, e.g. "Clean flat illustration, no gradients, bold shapes" */
+  visualStyle?: string;
+  /** Reusable image-prompt phrases the AI should incorporate, e.g. ["airport cargo terminal", "blue-toned lighting"] */
+  promptLibrary?: string[];
+  /** R2 public URLs of brand reference images (max 5) — passed as visual references to Gemini for moodboard + post image generation */
+  referenceImages?: string[];
+};
+
 export type BrandPromptTemplate = {
   id: string;
   displayName: string;
@@ -60,4 +74,5 @@ export type BrandPromptTemplate = {
   selfPromoGeneralValueProposition: string;
   suggestCampaign: SuggestCampaignCopy;
   themeBundles: Record<CampaignTheme, ThemeBundle>;
+  brandAssets?: BrandAssets;
 };

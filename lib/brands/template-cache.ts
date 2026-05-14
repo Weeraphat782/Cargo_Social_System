@@ -45,6 +45,30 @@ export function invalidateBrandTemplateCache(): void {
   inflight = null;
 }
 
+/**
+ * When an instance missed `invalidateBrandTemplateCache` after a new brand row was added
+ * (common on serverless warm instances), load this slug from DB and merge into the map.
+ */
+export async function ensureBrandTemplateFromDb(slug: string): Promise<BrandPromptTemplate | null> {
+  await ensureBrandTemplatesLoaded();
+  const m = getMergedTemplateMapOrThrow();
+  if (m.has(slug)) return m.get(slug)!;
+
+  const row = await prisma.brandTemplateMaster.findUnique({
+    where: { slug },
+    select: { slug: true, displayName: true, payload: true },
+  });
+  if (!row) return null;
+  try {
+    const t = parseBrandTemplateFromDb(row.slug, row.displayName, row.payload);
+    m.set(slug, t);
+    return t;
+  } catch (e) {
+    console.error(`[brands] ensureBrandTemplateFromDb: invalid payload for "${slug}":`, e);
+    return null;
+  }
+}
+
 export function getMergedTemplateMapOrThrow(): Map<string, BrandPromptTemplate> {
   if (!merged) {
     throw new Error("Brand templates not loaded; call await ensureBrandTemplatesLoaded() first");

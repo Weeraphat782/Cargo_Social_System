@@ -8,7 +8,7 @@ import { FileStack } from "lucide-react";
 import type { CampaignStatus } from "@prisma/client";
 import { formatInTimeZone } from "date-fns-tz";
 import { getCampaignProgressBar } from "@/lib/campaigns-progress";
-import { CountdownRing, ImageLightbox, PageHeader, ProgressBar } from "@/components/ui";
+import { CountdownRing, ImageLightbox, PageHeader, ProgressBar, Skeleton } from "@/components/ui";
 import { type CampaignDetailData } from "@/lib/campaigns-detail-payload";
 
 const platformMeta: Record<string, { label: string; cls: string }> = {
@@ -50,6 +50,8 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
   const [captionExpanded, setCaptionExpanded] = useState<Record<string, boolean>>({});
   const [actioning, setActioning] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ images: string[]; idx: number } | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [moodboardPrompt, setMoodboardPrompt] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/campaigns/${id}`);
@@ -121,6 +123,20 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
     if (!confirm("Delete this campaign?")) return;
     const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
     if (res.ok) { router.refresh(); router.push("/campaigns"); }
+  }
+
+  async function generateMoodboard() {
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/moodboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userPrompt: moodboardPrompt }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setGenerating(false);
+    }
   }
 
   const postsN = c.postsPerRun;
@@ -253,6 +269,112 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
         </p>
       )}
       {msg && <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8 }}>{msg}</p>}
+
+      {/* Moodboard */}
+      {(() => {
+        const moodboardImages = Array.isArray(c.moodboardImages) ? (c.moodboardImages as string[]) : [];
+        const moodboardUrl = moodboardImages[0] ?? null;
+        const generatedAt = c.moodboardGeneratedAt ? new Date(c.moodboardGeneratedAt as string) : null;
+        return (
+          <div className="omg-card" style={{ marginTop: 24, marginBottom: 8, maxWidth: 800, overflow: "hidden", padding: 0 }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Campaign Moodboard</h2>
+                <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                  Visual direction — color palette, scene, persona, mood. Used as reference for post image generation.
+                </p>
+              </div>
+              {generatedAt && !generating && (
+                <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
+                  {generatedAt.toLocaleDateString()}
+                </span>
+              )}
+            </div>
+            {/* Image area */}
+            {generating && (
+              <Skeleton variant="card" height={420} style={{ borderRadius: 0 }} />
+            )}
+            {!generating && moodboardUrl && (
+              <div
+                style={{ position: "relative", cursor: "zoom-in" }}
+                onClick={() => setLightbox({ images: [moodboardUrl], idx: 0 })}
+                title="Click to enlarge"
+              >
+                <img
+                  src={moodboardUrl}
+                  alt="Campaign moodboard"
+                  style={{ width: "100%", display: "block", aspectRatio: "16/9", objectFit: "cover" }}
+                />
+                {/* Campaign name overlay */}
+                <div style={{
+                  position: "absolute", inset: 0, pointerEvents: "none",
+                  background: "linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.18) 40%, transparent 70%)",
+                }} />
+                <div style={{
+                  position: "absolute", bottom: 0, left: 0, right: 0,
+                  padding: "20px 24px 18px",
+                  pointerEvents: "none",
+                }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 600, letterSpacing: "0.12em",
+                    textTransform: "uppercase", color: "rgba(255,255,255,0.6)",
+                    marginBottom: 5,
+                  }}>
+                    {c.brandTemplateId}
+                  </div>
+                  <div style={{
+                    fontSize: 22, fontWeight: 700, color: "#fff",
+                    lineHeight: 1.25, letterSpacing: "-0.01em",
+                    textShadow: "0 1px 8px rgba(0,0,0,0.4)",
+                  }}>
+                    {c.name}
+                  </div>
+                </div>
+              </div>
+            )}
+            {!generating && !moodboardUrl && (
+              <div style={{ padding: "32px 24px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                No moodboard yet — describe the visual direction below and click Generate.
+              </div>
+            )}
+            {/* Prompt + action footer */}
+            {!generating && (
+              <div style={{ padding: "12px 16px", borderTop: moodboardUrl ? "1px solid var(--border)" : undefined, display: "flex", gap: 10, alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 5 }}>
+                    {moodboardUrl ? "Adjust direction (optional)" : "Visual direction (optional)"}
+                  </label>
+                  <textarea
+                    value={moodboardPrompt}
+                    onChange={(e) => setMoodboardPrompt(e.target.value)}
+                    placeholder={moodboardUrl
+                      ? "e.g. warmer tones, more human presence, focus on air freight operations"
+                      : "e.g. dark moody tones, focus on speed and technology, premium feel"}
+                    rows={2}
+                    style={{
+                      width: "100%", boxSizing: "border-box",
+                      padding: "7px 10px", fontSize: 12, lineHeight: 1.5,
+                      border: "1px solid var(--border)", borderRadius: 6,
+                      background: "var(--bg-input, var(--bg-surface))",
+                      color: "var(--text-primary)", resize: "none", outline: "none",
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="omg-btn-primary"
+                  style={{ fontSize: 12, padding: "8px 14px", flexShrink: 0, whiteSpace: "nowrap" }}
+                  disabled={generating}
+                  onClick={() => void generateMoodboard()}
+                >
+                  {moodboardUrl ? "Regenerate" : "Generate moodboard"}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 28, maxWidth: 1100 }}>
         <div>
@@ -441,6 +563,20 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
                     <span className={`omg-badge ${statusBadge[post.status] ?? "omg-badge-pending"}`}>
                       {post.status.replace(/_/g, " ")}
                     </span>
+                    {post.contentPillar && (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--accent)",
+                        background: "var(--accent-dim)",
+                        border: "1px solid var(--accent)",
+                        borderRadius: 4,
+                        padding: "1px 7px",
+                        letterSpacing: "0.01em",
+                      }}>
+                        {post.contentPillar}
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)" }}>
                     {new Date(post.createdAt).toLocaleString()}

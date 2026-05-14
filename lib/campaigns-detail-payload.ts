@@ -18,6 +18,7 @@ async function fetchCampaignDetailImpl(id: string) {
             status: true,
             createdAt: true,
             scheduledAt: true,
+            contentPillar: true,
             topic: { select: { name: true } },
             sourceNews: { select: { title: true, url: true } },
             variants: {
@@ -79,6 +80,7 @@ async function fetchCampaignDetailImpl(id: string) {
     endAt: c.endAt?.toISOString() ?? null,
     lastRunAt: c.lastRunAt?.toISOString() ?? null,
     nextRunAt: c.nextRunAt?.toISOString() ?? null,
+    moodboardGeneratedAt: c.moodboardGeneratedAt?.toISOString() ?? null,
     runs: c.runs.map(r => ({
         ...r,
         startedAt: r.startedAt.toISOString(),

@@ -62,6 +62,7 @@ type PatchBody = {
   campaignGoal?: string | null;
   targetPersona?: string | null;
   contentPillars?: string | null;
+  platformStrategies?: Record<string, string> | null;
 };
 
 export async function GET(
@@ -86,6 +87,7 @@ export async function GET(
             status: true,
             createdAt: true,
             scheduledAt: true,
+            contentPillar: true,
             topic: { select: { name: true } },
             sourceNews: { select: { title: true, url: true } },
             variants: {
@@ -178,6 +180,9 @@ export async function PATCH(
   if (body.campaignGoal !== undefined) u.campaignGoal = body.campaignGoal?.trim() || null;
   if (body.targetPersona !== undefined) u.targetPersona = body.targetPersona?.trim() || null;
   if (body.contentPillars !== undefined) u.contentPillars = body.contentPillars?.trim() || null;
+  if (body.platformStrategies !== undefined) {
+    u.platformStrategies = body.platformStrategies ?? Prisma.JsonNull;
+  }
   if (body.cadence != null) u.cadence = body.cadence;
   if (body.dayOfWeek !== undefined) u.dayOfWeek = body.dayOfWeek;
   if (body.hourOfDay !== undefined) u.hourOfDay = body.hourOfDay;

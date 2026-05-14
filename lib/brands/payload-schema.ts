@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BrandPromptTemplate, ThemeBundle } from "./types";
+import type { BrandAssets, BrandPromptTemplate, ThemeBundle } from "./types";
 import { CampaignTheme } from "@prisma/client";
 
 const campaignThemeSchema = z.nativeEnum(CampaignTheme);
@@ -35,6 +35,15 @@ const selfPromoSchema = z.object({
   fallbackPublicUrl: z.string(),
 });
 
+const brandAssetsSchema: z.ZodType<BrandAssets> = z.object({
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  typography: z.string().optional(),
+  visualStyle: z.string().optional(),
+  promptLibrary: z.array(z.string()).optional(),
+  referenceImages: z.array(z.string()).optional(),
+});
+
 const suggestSchema = z.object({
   plannerBrief: z.string(),
   plannerRoleLine: z.string(),
@@ -60,6 +69,7 @@ export const brandPromptTemplatePayloadZ = z.object({
   selfPromoGeneralValueProposition: z.string(),
   suggestCampaign: suggestSchema,
   themeBundles: themeBundlesSchema,
+  brandAssets: brandAssetsSchema.optional(),
 });
 
 /**
@@ -90,6 +100,7 @@ export function parseBrandTemplateFromDb(
     selfPromoGeneralValueProposition: parsed.selfPromoGeneralValueProposition,
     suggestCampaign: parsed.suggestCampaign,
     themeBundles: parsed.themeBundles,
+    brandAssets: parsed.brandAssets,
   };
 }
 
@@ -112,5 +123,6 @@ export function templateToJsonPayload(t: BrandPromptTemplate): object {
     selfPromoGeneralValueProposition: t.selfPromoGeneralValueProposition,
     suggestCampaign: t.suggestCampaign,
     themeBundles: t.themeBundles,
+    brandAssets: t.brandAssets,
   };
 }

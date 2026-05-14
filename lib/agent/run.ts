@@ -58,8 +58,8 @@ export type ImagePromptBlock = {
 };
 
 const IMAGE_PROMPT_JSON_RULES = `The imagePrompt field MUST be a JSON object with:
-- subject: one sentence for the main scene, using CONCRETE NOUNS from the article title/snippet (or from the campaign / focus for self-promo). Do NOT default to pharmaceutical cold boxes, high-tech control rooms, dashboards, or generic warehouse interiors unless the source explicitly describes them.
-- keyElements: 3-5 short strings (places, objects, people/roles, actions) taken from the same source. No brand names as readable text in the final image.
+- subject: one sentence describing the CONCEPTUAL SCENE — focus on the activity, industry context, and emotion. Do NOT name specific real-world companies, locations, buildings, roads, landmarks, or geographic places (e.g. do NOT write "Taksan warehouse", "Bangkok port", "OMG hub" — instead write "a freight sorting facility", "a busy container port", "logistics workers processing parcels"). This prevents AI hallucination of real places the model has never seen.
+- keyElements: 3-5 short conceptual strings describing activities, roles, objects, or emotions — NOT place names or company names. No brand names as readable text in the final image.
 - mood: optional 1-4 words. Theme palette and lighting are added later; do not pack environment clichés into subject. No text, watermarks, or logos in the final image.`;
 
 const draftResponseSchema: Schema = {
@@ -176,7 +176,12 @@ export function normalizeImagePrompt(raw: unknown): ImagePromptBlock {
  */
 export function composeImageBrief(
   block: ImagePromptBlock,
-  options: { paletteHint?: string; defaultMood?: string }
+  options: {
+    paletteHint?: string;
+    defaultMood?: string;
+    /** When true, Gemini receives brand reference photographs — keep brief visually compatible */
+    brandReferenceAnchored?: boolean;
+  }
 ): string {
   const subject = block.subject.trim() || "Scene grounded in the source context.";
   const elements = (block.keyElements ?? [])
@@ -187,7 +192,13 @@ export function composeImageBrief(
     (options.defaultMood && options.defaultMood.trim()) ||
     "";
 
-  const lines: string[] = [`Scene: ${subject}.`];
+  const lines: string[] = [];
+  if (options.brandReferenceAnchored) {
+    lines.push(
+      "Visual anchor: replicate look-and-feel of the provided brand reference images (PRIMARY). Palette / lighting notes below are SECONDARY if they conflict with those photos."
+    );
+  }
+  lines.push(`Scene: ${subject}.`);
   if (elements.length) {
     lines.push(`Key elements: ${elements.join(", ")}.`);
   }
@@ -244,7 +255,12 @@ export async function draftWithGemini(
 ): Promise<DraftJson> {
   const prompt = buildTopicNewsDraftPrompt(
     template,
-    input,
+    {
+      ...input,
+      brandHasReferenceImages: Boolean(
+        template.brandAssets?.referenceImages?.some((u) => u?.trim())
+      ),
+    },
     IMAGE_PROMPT_JSON_RULES
   );
 
@@ -286,12 +302,20 @@ export async function draftWithGeminiForCampaign(
     campaignGoal?: string | null;
     targetPersona?: string | null;
     contentPillars?: string | null;
+    activePillar?: string | null;
+    platformStrategies?: Record<string, string> | null;
+    editorialBrief?: string | null;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
   const prompt = buildCampaignNewsDraftPrompt(
     template,
-    input,
+    {
+      ...input,
+      brandHasReferenceImages: Boolean(
+        template.brandAssets?.referenceImages?.some((u) => u?.trim())
+      ),
+    },
     IMAGE_PROMPT_JSON_RULES
   );
 
@@ -333,12 +357,20 @@ export async function draftWithGeminiForPromoCampaign(
     campaignGoal?: string | null;
     targetPersona?: string | null;
     contentPillars?: string | null;
+    activePillar?: string | null;
+    platformStrategies?: Record<string, string> | null;
+    editorialBrief?: string | null;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
   const prompt = buildCampaignSelfPromoDraftPrompt(
     template,
-    input,
+    {
+      ...input,
+      brandHasReferenceImages: Boolean(
+        template.brandAssets?.referenceImages?.some((u) => u?.trim())
+      ),
+    },
     IMAGE_PROMPT_JSON_RULES
   );
 
@@ -436,6 +468,14 @@ async function searchNewsWithRetry(
   );
 }
 
+/** Pick one pillar from the comma-separated list by rotating on post index. */
+function pickPillar(contentPillars: string | null | undefined, index: number): string | null {
+  if (!contentPillars?.trim()) return null;
+  const pillars = contentPillars.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!pillars.length) return null;
+  return pillars[index % pillars.length] ?? null;
+}
+
 export type RunAgentForCampaignOptions = {
   /** When true, only ACTIVE campaigns run. Manual UI uses false. */
   forCron?: boolean;
@@ -488,6 +528,21 @@ export async function runAgentForCampaign(
   }
   let explicitSearchAnchor = new Date();
 
+  // Find the next due pending plans for this run.
+  // Use order-based matching (not a tight time window) so plans are consumed
+  // even if the cron fires slightly off from the planner's computed scheduledFor.
+  // Takes the postsPerRun oldest due plans, ordered by scheduledFor then indexInRun.
+  const pendingPlans = await prisma.postPlan.findMany({
+    where: {
+      campaignId: campaign.id,
+      status: "PENDING",
+    },
+    orderBy: [{ scheduledFor: "asc" }, { indexInRun: "asc" }],
+    take: campaign.postsPerRun,
+  });
+  // Map by position in the sorted list (post i=0 gets plans[0], etc.)
+  const planByIndex = new Map(pendingPlans.map((p, listIdx) => [listIdx, p]));
+
   let results: GoogleNewsResult[] = [];
   if (!selfPromo) {
     const kw = campaign.keywords.trim();
@@ -512,16 +567,23 @@ export async function runAgentForCampaign(
 
   const postIds: string[] = [];
 
+  // Count existing posts for accurate pillar rotation offset (so each run picks the next pillar)
+  const existingPostCount = await prisma.post.count({ where: { campaignId: campaign.id } });
+
   for (let i = 0; i < campaign.postsPerRun; i++) {
     if (campaign.totalPostsCap != null) {
-      const count = await prisma.post.count({ where: { campaignId: campaign.id } });
-      if (count >= campaign.totalPostsCap) break;
+      const capCount = await prisma.post.count({ where: { campaignId: campaign.id } });
+      if (capCount >= campaign.totalPostsCap) break;
     }
 
     const theme = allThemeBundles[Math.floor(Math.random() * allThemeBundles.length)];
+    const plan = planByIndex.get(i) ?? null;
+    const activePillar = plan?.pillar ?? pickPillar(campaign.contentPillars, existingPostCount + i);
+    const effectiveKeywords = plan?.keywordHint?.trim() || campaign.keywords;
 
     let draft: DraftJson;
     let sourceNewsId: string | null = null;
+    let topNewsForImage: { title: string; snippet?: string } | null = null;
 
     if (selfPromo) {
       draft = await draftWithGeminiForPromoCampaign(
@@ -529,7 +591,7 @@ export async function runAgentForCampaign(
           campaignName: campaign.name,
           description: campaign.description,
           brandVoice: campaign.brandVoice,
-          highlightKeywords: campaign.keywords,
+          highlightKeywords: effectiveKeywords,
           theme,
           recentCaptions,
           recentImagePrompts,
@@ -537,12 +599,25 @@ export async function runAgentForCampaign(
           campaignGoal: campaign.campaignGoal,
           targetPersona: campaign.targetPersona,
           contentPillars: campaign.contentPillars,
+          activePillar,
+          platformStrategies: (campaign.platformStrategies ?? null) as Record<string, string> | null,
+          editorialBrief: plan?.brief ?? null,
         },
         template
       );
     } else {
-      const top = results[i] ?? results[0];
+      // If plan has a specific keyword hint, do a targeted search for this post
+      let postResults = results;
+      if (plan?.keywordHint?.trim() && plan.keywordHint.trim() !== campaign.keywords.trim()) {
+        try {
+          postResults = await searchNewsWithRetry(plan.keywordHint.trim(), { num: 3 });
+        } catch {
+          postResults = results;
+        }
+      }
+      const top = postResults[i] ?? postResults[0] ?? results[i] ?? results[0];
       if (!top) break;
+      topNewsForImage = { title: top.title, snippet: top.snippet };
       const newsRow = await prisma.newsItem.findFirst({ where: { url: top.link } });
       if (!newsRow) {
         throw new Error("NewsItem missing after search");
@@ -562,6 +637,9 @@ export async function runAgentForCampaign(
           campaignGoal: campaign.campaignGoal,
           targetPersona: campaign.targetPersona,
           contentPillars: campaign.contentPillars,
+          activePillar,
+          platformStrategies: (campaign.platformStrategies ?? null) as Record<string, string> | null,
+          editorialBrief: plan?.brief ?? null,
         },
         template
       );
@@ -574,10 +652,7 @@ export async function runAgentForCampaign(
             [campaign.description, campaign.keywords].filter(Boolean).join(" | ") ||
             undefined,
         }
-      : (() => {
-          const t = results[i] ?? results[0];
-          return { title: t?.title ?? campaign.name, snippet: t?.snippet };
-        })();
+      : (topNewsForImage ?? { title: campaign.name });
 
     const p0 = platformList[0] ?? "FACEBOOK";
     const aspect: AspectKey = platformList.includes("OMG")
@@ -588,7 +663,22 @@ export async function runAgentForCampaign(
           ? "LINKEDIN"
           : "FACEBOOK";
 
-    const imageBrief = composeImageBrief(draft.imagePrompt, {});
+    // Pass campaign moodboard as visual reference if it exists
+    const moodboardImages = Array.isArray(campaign.moodboardImages)
+      ? (campaign.moodboardImages as string[])
+      : [];
+    const moodboardReferenceUrl =
+      moodboardImages[0] && !moodboardImages[0].startsWith("data:")
+        ? moodboardImages[0]
+        : null;
+
+    const brandRefAnchored = Boolean(
+      template.brandAssets?.referenceImages?.some((u) => u?.trim())
+    );
+    const imageBrief = composeImageBrief(draft.imagePrompt, {
+      paletteHint: template.brandAssets?.visualStyle ?? undefined,
+      brandReferenceAnchored: brandRefAnchored,
+    });
     const imageCount = Math.max(1, Math.min(4, campaign.imagesPerPost ?? 1));
     const COMPOSITION_ANGLES = [
       "Wide establishing shot — show the full scene and environment.",
@@ -609,6 +699,8 @@ export async function runAgentForCampaign(
           storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}-${imgIdx}`,
           referenceCategory: theme.referenceCategory,
           newsContext: newsForImage,
+          moodboardReferenceUrl,
+          brandReferenceUrls: (template.brandAssets?.referenceImages ?? null),
         });
         generatedImages.push({ url: gen.imageUrl, prompt: gen.prompt });
       } catch (err) {
@@ -646,6 +738,7 @@ export async function runAgentForCampaign(
             status: PostStatus.DRAFTING,
             campaignId: campaign.id,
             sourceNewsId,
+            contentPillar: activePillar,
           },
         });
 
@@ -708,6 +801,13 @@ export async function runAgentForCampaign(
       },
     });
 
+    if (plan) {
+      await prisma.postPlan.update({
+        where: { id: plan.id },
+        data: { status: "EXECUTED", postId: created.id },
+      });
+    }
+
     postIds.push(created.id);
   }
 
@@ -740,8 +840,13 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
     topicTemplate
   );
 
+  const brandRefAnchored = Boolean(
+    topicTemplate.brandAssets?.referenceImages?.some((u) => u?.trim())
+  );
   const imageBrief = composeImageBrief(draft.imagePrompt, {
-    paletteHint: DEFAULT_NEUTRAL_PALETTE,
+    paletteHint:
+      topicTemplate.brandAssets?.visualStyle?.trim() || DEFAULT_NEUTRAL_PALETTE,
+    brandReferenceAnchored: brandRefAnchored,
   });
   let sharedImagePrompt = imageBrief;
   let sharedImageUrl = PLACEHOLDER_PNG;
@@ -751,6 +856,7 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
       aspect: "OMG",
       storageKeyPrefix: `draft/${topicId}/shared`,
       newsContext: { title: top.title, snippet: top.snippet },
+      brandReferenceUrls: topicTemplate.brandAssets?.referenceImages ?? null,
     });
     sharedImageUrl = gen.imageUrl;
     sharedImagePrompt = gen.prompt;

@@ -26,6 +26,7 @@ type CampaignLoad = {
   campaignGoal: string | null;
   targetPersona: string | null;
   contentPillars: string | null;
+  platformStrategies: Prisma.JsonValue | null;
   description: string | null;
   brandVoice: string | null;
   theme: CampaignFormFieldsValue["theme"];
@@ -132,6 +133,7 @@ export default function EditCampaignPage() {
           campaignGoal: campaignGoal.trim() || null,
           targetPersona: targetPersona.trim() || null,
           contentPillars: contentPillars.trim() || null,
+          platformStrategies: form.platformStrategies,
           description: description.trim() || null,
           brandVoice: brandVoice.trim() || null,
           theme,
@@ -168,18 +170,19 @@ export default function EditCampaignPage() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 560 }}>
+      <div>
         <Skeleton variant="card" height={88} style={{ marginBottom: 16 }} />
-        <Skeleton variant="line" width="100%" height={14} style={{ marginBottom: 8 }} />
-        <Skeleton variant="line" width="90%" height={14} style={{ marginBottom: 8 }} />
-        <Skeleton variant="card" height={200} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <Skeleton variant="card" height={280} />
+          <Skeleton variant="card" height={280} />
+        </div>
       </div>
     );
   }
 
   if (status === "COMPLETED") {
     return (
-      <div style={{ maxWidth: 560 }}>
+      <div>
         <PageHeader title="Edit campaign" subtitle="This campaign is completed and cannot be edited." icon={<Pencil size={26} strokeWidth={1.75} />} />
         <p style={{ color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 16 }}>
           This campaign is <strong>COMPLETED</strong> and can&apos;t be edited. Create a new campaign or duplicate from
@@ -193,7 +196,10 @@ export default function EditCampaignPage() {
   }
 
   return (
-    <div style={{ maxWidth: 560 }}>
+    <div>
+      <div style={{ marginBottom: 12 }}>
+        <Link href={`/campaigns/${id}`} style={{ fontSize: 12, color: "var(--accent)" }}>← Campaign</Link>
+      </div>
       <PageHeader
         eyebrow="Edit campaign"
         title="Campaign settings"
@@ -201,19 +207,9 @@ export default function EditCampaignPage() {
         icon={<Pencil size={26} strokeWidth={1.75} />}
       />
       {error && (
-        <p
-          style={{
-            fontSize: 13,
-            color: "var(--danger)",
-            marginBottom: 12,
-            padding: 10,
-            background: "var(--bg-elevated)",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-          }}
-        >
+        <div style={{ fontSize: 13, color: "var(--danger)", marginBottom: 16, padding: "10px 14px", background: "var(--bg-elevated)", borderRadius: 8, border: "1px solid var(--border)" }}>
           {error}
-        </p>
+        </div>
       )}
       <CampaignFormFields
         value={form}
@@ -222,13 +218,12 @@ export default function EditCampaignPage() {
           setForm((prev) => ({ ...prev, schedule: { ...prev.schedule, ...patch } }))
         }
         idPrefix="edit"
-        layout="manual"
+        layout="page"
         showAdvanced={true}
         onAdvancedOpenChange={() => {}}
-        alwaysShowAdvanced
         brandOptions={brandOptions}
       />
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
         <button type="button" className="omg-btn-primary" disabled={saving} onClick={() => void save()}>
           {saving ? "Saving…" : "Save changes"}
         </button>

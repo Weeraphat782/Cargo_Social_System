@@ -30,6 +30,22 @@ function getGenAI(): GoogleGenAI {
  * Generate an image with Gemini (image-capable model) and upload to R2.
  * Falls back to returning a placeholder data URL only if generation returns no image (dev).
  */
+/** Fetch a remote image URL and return its bytes + mime type for multimodal use. */
+async function fetchRemoteImage(
+  url: string
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "image/jpeg";
+    const mimeType = contentType.split(";")[0].trim();
+    const ab = await res.arrayBuffer();
+    return { data: Buffer.from(ab), mimeType };
+  } catch {
+    return null;
+  }
+}
+
 export async function generateAndUploadImage(options: {
   prompt: string;
   aspect: AspectKey;
@@ -38,6 +54,17 @@ export async function generateAndUploadImage(options: {
   referenceCategory?: string | null;
   /** Article / post grounding to avoid generic stock look */
   newsContext?: { title: string; snippet?: string } | null;
+  /**
+   * URL of the campaign moodboard image — passed as a visual reference so
+   * generated post images align with the campaign's established color/mood direction.
+   */
+  moodboardReferenceUrl?: string | null;
+  /**
+   * R2 URLs of brand reference images from brandAssets.referenceImages.
+   * Passed as visual style references — Gemini matches color, aesthetic, and feel.
+   * Order with moodboard: brand refs first (up to 4), then moodboard (if room), then category refs; total capped at 5.
+   */
+  brandReferenceUrls?: string[] | null;
 }): Promise<{ imageUrl: string; prompt: string }> {
   const { w, h, label } = ASPECT_PRESETS[options.aspect];
   const refCategory = options.referenceCategory?.trim() || undefined;
@@ -60,9 +87,10 @@ export async function generateAndUploadImage(options: {
 
   const fullPrompt = `${options.prompt}${sourceBlock}${styleNotesBlock}
 
-Style: photographic, editorial quality, natural composition, no text overlays, no watermarks, no logos.
-The subject must follow the scene and source description above. Avoid defaulting to cold-chain pharmaceutical boxes, high-tech control rooms, or generic warehouse or dashboard interiors unless the source explicitly describes them.
-Aim for visual variety across different posts; prefer a concrete, story-specific scene over a stock cliché.
+Style: professional commercial marketing photography, editorial quality, natural composition, no text overlays, no watermarks, no logos.
+IMPORTANT — avoid hallucination: Do NOT attempt to render specific real-world locations, company buildings, named landmarks, or geographic places (streets, roads, city views) that you have not seen accurately in training data. Instead, represent the concept and industry through carefully composed scenes — a well-lit facility interior, workers in action, cargo in motion — that feel authentic without claiming to depict any specific real place.
+Avoid defaulting to cold-chain pharmaceutical boxes, high-tech control rooms, or generic warehouse or dashboard interiors unless the source explicitly describes them.
+Aim for visual variety across different posts; prefer a concept-driven scene with real human presence over an empty or abstract stock look.
 Composition: ${label}, approximately ${w}x${h} pixels.`;
 
   const ai = getGenAI();
@@ -70,16 +98,76 @@ Composition: ${label}, approximately ${w}x${h} pixels.`;
   const model =
     process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash-exp";
 
+  const MAX_TOTAL = 5;
+
+  const brandUrls = (options.brandReferenceUrls ?? [])
+    .filter((u) => u && !u.startsWith("data:"))
+    .slice(0, 4);
+  const brandRefs = (
+    await Promise.all(brandUrls.map((u) => fetchRemoteImage(u)))
+  ).filter((r): r is { data: Buffer; mimeType: string } => r !== null);
+
+  const moodboardFetched = options.moodboardReferenceUrl
+    ? await fetchRemoteImage(options.moodboardReferenceUrl)
+    : null;
+
+  let slotsLeft = MAX_TOTAL - brandRefs.length;
+  const includeMoodboard = Boolean(moodboardFetched && slotsLeft > 0);
+  if (includeMoodboard) slotsLeft -= 1;
+
+  const categoryCap =
+    brandRefs.length > 0 ? Math.min(slotsLeft, 1) : Math.min(slotsLeft, 3);
+  const categorySlice = refSet.images.slice(0, categoryCap);
+
+  const prioritisedRefs = [
+    ...brandRefs.map((r) => ({ ref: r, role: "brand" as const })),
+    ...(includeMoodboard && moodboardFetched
+      ? [{ ref: moodboardFetched, role: "moodboard" as const }]
+      : []),
+    ...categorySlice.map((r) => ({ ref: r, role: "category" as const })),
+  ];
+
+  const allRefImages = prioritisedRefs.map((p) => p.ref);
+  const hasMoodboard = prioritisedRefs.some((p) => p.role === "moodboard");
+  const hasBrand = prioritisedRefs.some((p) => p.role === "brand");
+
+  const introLines: string[] = [];
+  introLines.push(
+    "MULTIMODAL IMAGE ORDER (parts left-to-right): brand reference photographs first (if any), then campaign moodboard (if any), then optional folder style refs."
+  );
+  if (hasBrand) {
+    introLines.push(
+      "• The FIRST images are the brand's OFFICIAL reference photographs — they are the PRIMARY visual anchor. Match color palette, lighting, photographic style, lens feel, and subject treatment. Do NOT add on-image text, logos, watermarks, signage, or branded objects not visible in those references unless the text prompt explicitly calls for a minimal abstract scene."
+    );
+    introLines.push(
+      "• Brand references override generic stock tendencies; if palette hints in the text conflict with the photos, follow the photos."
+    );
+  }
+  if (hasMoodboard && hasBrand) {
+    introLines.push(
+      "• After the brand-reference block: campaign moodboard — extend its mood while staying inside the brand photo look-and-feel."
+    );
+  } else if (hasMoodboard && !hasBrand) {
+    introLines.push(
+      "• The first attached image is the campaign moodboard — match its palette and aesthetic closely."
+    );
+  }
+  if (categorySlice.length > 0) {
+    introLines.push(
+      "• Final attached images are supplementary composition hints only — they must not contradict brand references or moodboard."
+    );
+  }
+
   const multimodalIntro =
-    refSet.images.length > 0
-      ? "The following images are reference examples for style, color palette, and composition only. Generate a single new image that matches the text prompt; do not copy, collage, or reproduce the reference images.\n\n"
+    allRefImages.length > 0
+      ? `${introLines.join("\n")}\nGenerate a single NEW original image that follows the text prompt while staying true to the visual world established by the references above. Do not copy or reproduce any reference image directly.\n\n`
       : "";
 
   const contents =
-    refSet.images.length > 0
+    allRefImages.length > 0
       ? createUserContent([
           createPartFromText(`${multimodalIntro}${fullPrompt}`),
-          ...refSet.images.map((img) =>
+          ...allRefImages.map((img) =>
             createPartFromBase64(img.data.toString("base64"), img.mimeType)
           ),
         ])

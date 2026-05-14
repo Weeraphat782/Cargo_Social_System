@@ -1,6 +1,12 @@
 import type { BrandPromptTemplate } from "./types";
 import type { ThemeBundle } from "./types";
 
+/** Extra LLM instructions when brandAssets.referenceImages are configured (passed to image gen). */
+function brandReferenceImagesInstruction(enabled?: boolean): string {
+  if (!enabled) return "";
+  return `\nFINAL IMAGE — BRAND REFERENCE PHOTOS (this brand has uploaded reference images):\nThe renderer passes those photographs into the image model as the PRIMARY visual anchor. Your JSON imagePrompt MUST describe a scene consistent with that same world — palette tendency, lighting quality, photographic style, and subject treatment.\nDo NOT invent readable text, logos, watermarks, signage, or branded objects not implied by those references.\nCopy may reference news or places; the IMAGE must still obey the brand reference photos.\n`;
+}
+
 function servicesCatalogLines(t: BrandPromptTemplate): string {
   return t.services.map((s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`).join("\n");
 }
@@ -13,6 +19,8 @@ export function buildTopicNewsDraftPrompt(
     newsTitle: string;
     newsUrl: string;
     newsSnippet: string;
+    /** True when brand master has referenceImages — image gen anchors on those photos */
+    brandHasReferenceImages?: boolean;
   },
   imagePromptJsonRules: string
 ): string {
@@ -47,7 +55,7 @@ Social requirements (promo, NOT news rewrite):
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around ${t.orgShort} capability.
 - Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: ${t.mandatoryCtaUrl}
 
-${imagePromptJsonRules}
+${brandReferenceImagesInstruction(input.brandHasReferenceImages)}${imagePromptJsonRules}
 Ground the image in the article's title and snippet, not a generic "tech logistics" look.`;
 }
 
@@ -55,6 +63,18 @@ const LANGUAGE_LABELS: Record<string, string> = {
   en: "English",
   th: "Thai (ภาษาไทย)",
 };
+
+function buildPlatformStrategyBlock(ps: Record<string, string> | null | undefined): string {
+  if (!ps) return "";
+  const lines = [
+    ps.FACEBOOK?.trim() ? `• Facebook: ${ps.FACEBOOK.trim()}` : "",
+    ps.INSTAGRAM?.trim() ? `• Instagram: ${ps.INSTAGRAM.trim()}` : "",
+    ps.LINKEDIN?.trim() ? `• LinkedIn: ${ps.LINKEDIN.trim()}` : "",
+    ps.OMG?.trim() ? `• OMG article: ${ps.OMG.trim()}` : "",
+  ].filter(Boolean);
+  if (!lines.length) return "";
+  return `\nPLATFORM STRATEGY (apply per platform — override defaults where specified):\n${lines.join("\n")}\n`;
+}
 
 function languageInstruction(contentLanguage: string): string {
   if (contentLanguage === "en" || !contentLanguage) return "";
@@ -77,15 +97,30 @@ export function buildCampaignNewsDraftPrompt(
     campaignGoal?: string | null;
     targetPersona?: string | null;
     contentPillars?: string | null;
+    /** The single pillar assigned to this specific post (pre-rotated by the agent). */
+    activePillar?: string | null;
+    platformStrategies?: Record<string, string> | null;
+    /** Human-written or AI-generated editorial brief for this specific post slot. */
+    editorialBrief?: string | null;
+    /** True when brand master has referenceImages — multimodal image gen anchors on those photos */
+    brandHasReferenceImages?: boolean;
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
+  const pillarLine = input.activePillar
+    ? `Content pillar for THIS post: ${input.activePillar} — write all captions through this lens. Other pillars exist in the campaign but are not for this post.`
+    : input.contentPillars
+      ? `Content pillars (choose one that fits best): ${input.contentPillars}`
+      : "";
   const strategyBlock = [
     input.campaignGoal ? `Campaign goal: ${input.campaignGoal}` : "",
     input.targetPersona ? `Target persona: ${input.targetPersona}` : "",
-    input.contentPillars ? `Content pillars for this run: ${input.contentPillars}` : "",
+    pillarLine,
   ].filter(Boolean).join("\n");
+  const briefBlock = input.editorialBrief?.trim()
+    ? `\nEDITORIAL BRIEF FOR THIS POST (follow this direction closely):\n${input.editorialBrief.trim()}\n`
+    : "";
   const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
       ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
@@ -99,6 +134,7 @@ export function buildCampaignNewsDraftPrompt(
       ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
   const langBlock = languageInstruction(input.contentLanguage ?? "en");
+  const platformBlock = buildPlatformStrategyBlock(input.platformStrategies);
   return `${t.strategistTagline}
 
 CAMPAIGN (theme-driven automation): ${input.campaignName}
@@ -107,7 +143,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use ${t.orgShort} services catalog to stay factual.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${strategyBlock ? `\n${strategyBlock}\n` : ""}${langBlock}${diversityBlock}
+${strategyBlock ? `\n${strategyBlock}\n` : ""}${briefBlock}${platformBlock}${langBlock}${diversityBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -135,7 +171,7 @@ Social requirements (promo, NOT news rewrite):
 - LinkedIn: short paragraphs, under 2600 characters, thought-leadership framed around ${t.orgShort} capability and the campaign theme.
 - Mandatory CTA: At the very end of EVERY social media caption (Facebook, Instagram, LinkedIn), you MUST append this exact URL: ${t.mandatoryCtaUrl}
 
-${imagePromptJsonRules}
+${brandReferenceImagesInstruction(input.brandHasReferenceImages)}${imagePromptJsonRules}
 The scene must come from the news article, not the theme name. Theme only influences copy tone; palette is applied at image render time.`;
 }
 
@@ -153,17 +189,32 @@ export function buildCampaignSelfPromoDraftPrompt(
     campaignGoal?: string | null;
     targetPersona?: string | null;
     contentPillars?: string | null;
+    /** The single pillar assigned to this specific post (pre-rotated by the agent). */
+    activePillar?: string | null;
+    platformStrategies?: Record<string, string> | null;
+    /** Human-written or AI-generated editorial brief for this specific post slot. */
+    editorialBrief?: string | null;
+    /** True when brand master has referenceImages */
+    brandHasReferenceImages?: boolean;
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
   const focus =
     input.highlightKeywords.trim() || t.selfPromoGeneralValueProposition;
+  const pillarLine = input.activePillar
+    ? `Content pillar for THIS post: ${input.activePillar} — write all captions through this lens. Other pillars exist in the campaign but are not for this post.`
+    : input.contentPillars
+      ? `Content pillars (choose one that fits best): ${input.contentPillars}`
+      : "";
   const strategyBlock = [
     input.campaignGoal ? `Campaign goal: ${input.campaignGoal}` : "",
     input.targetPersona ? `Target persona: ${input.targetPersona}` : "",
-    input.contentPillars ? `Content pillars for this run: ${input.contentPillars}` : "",
+    pillarLine,
   ].filter(Boolean).join("\n");
+  const briefBlock = input.editorialBrief?.trim()
+    ? `\nEDITORIAL BRIEF FOR THIS POST (follow this direction closely):\n${input.editorialBrief.trim()}\n`
+    : "";
   const captionLines =
     input.recentCaptions && input.recentCaptions.length > 0
       ? `Recent captions (avoid repeating these hooks/angles):\n${input.recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 250)}`).join("\n")}`
@@ -177,6 +228,7 @@ export function buildCampaignSelfPromoDraftPrompt(
       ? `\nCONTENT DIVERSITY REQUIREMENT — do NOT repeat any of the following:\n${captionLines}${captionLines && imageLines ? "\n" : ""}${imageLines}\n`
       : "";
   const langBlock = languageInstruction(input.contentLanguage ?? "en");
+  const platformBlock = buildPlatformStrategyBlock(input.platformStrategies);
 
   return `${t.strategistTagline}
 
@@ -189,7 +241,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the narrative around: **${input.theme.leadServiceName}** when it fits, but you may also tie in other ${t.orgShort} services from the catalog.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${strategyBlock ? `\n${strategyBlock}\n` : ""}${langBlock}${diversityBlock}
+${strategyBlock ? `\n${strategyBlock}\n` : ""}${briefBlock}${platformBlock}${langBlock}${diversityBlock}
 
 This run is PURE **brand and capability promotion** — not based on a specific external article. Do not invent false statistics or fake customer names.
 
@@ -209,7 +261,7 @@ Social copy:
 
 ${t.selfPromoEditorialNoExternalSource}
 
-${imagePromptJsonRules}
+${brandReferenceImagesInstruction(input.brandHasReferenceImages)}${imagePromptJsonRules}
 For SELF-PROMO (no news article), base imagePrompt.subject and keyElements on the campaign name, description, and highlight keywords, plus the most relevant ${t.orgShort} service concepts — still avoid empty clichés like "dashboard" or "cold box" unless the copy truly demands it.`;
 }
 

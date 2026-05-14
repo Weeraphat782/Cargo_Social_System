@@ -71,6 +71,7 @@ export async function POST(req: Request) {
     campaignGoal?: string | null;
     targetPersona?: string | null;
     contentPillars?: string | null;
+    platformStrategies?: Record<string, string> | null;
   };
 
   let brandTemplateId = "omg";
@@ -228,6 +229,7 @@ export async function POST(req: Request) {
       campaignGoal: body.campaignGoal?.trim() || null,
       targetPersona: body.targetPersona?.trim() || null,
       contentPillars: body.contentPillars?.trim() || null,
+      platformStrategies: body.platformStrategies ?? Prisma.JsonNull,
       name: body.name.trim(),
       brandTemplateId,
       description: body.description?.trim() || null,

@@ -3,6 +3,7 @@ import { Platform } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { generateAndUploadImage, ASPECT_PRESETS } from "@/lib/imagegen/gemini";
+import { resolveCampaignImageRefs } from "@/lib/brands/campaign-image-refs";
 
 const aspectFor: Record<Platform, keyof typeof ASPECT_PRESETS> = {
   FACEBOOK: "FACEBOOK",
@@ -37,7 +38,15 @@ export async function POST(
       where: { id: postId },
       select: {
         sourceNews: { select: { title: true, snippet: true } },
-        campaign: { select: { name: true, description: true, keywords: true } },
+        campaign: {
+          select: {
+            name: true,
+            description: true,
+            keywords: true,
+            moodboardImages: true,
+            brandTemplateId: true,
+          },
+        },
       },
     }),
   ]);
@@ -55,6 +64,17 @@ export async function POST(
           undefined,
       };
 
+  let moodboardReferenceUrl: string | null = null;
+  let brandReferenceUrls: string[] | null = null;
+  if (post?.campaign) {
+    const refs = await resolveCampaignImageRefs({
+      moodboardImages: post.campaign.moodboardImages,
+      brandTemplateId: post.campaign.brandTemplateId,
+    });
+    moodboardReferenceUrl = refs.moodboardReferenceUrl;
+    brandReferenceUrls = refs.brandReferenceUrls;
+  }
+
   try {
     const gen = await generateAndUploadImage({
       prompt,
@@ -62,6 +82,8 @@ export async function POST(
       storageKeyPrefix: `posts/${postId}/${variant.platform.toLowerCase()}`,
       referenceCategory: body.referenceCategory ?? undefined,
       newsContext,
+      moodboardReferenceUrl,
+      brandReferenceUrls,
     });
 
     const media = variant.media[0];

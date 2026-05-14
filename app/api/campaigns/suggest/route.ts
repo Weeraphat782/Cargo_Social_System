@@ -10,7 +10,8 @@ import { auth } from "@/auth";
 import { requireEnv } from "@/lib/env";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import { buildSuggestCampaignPrompt } from "@/lib/brands/build-prompts";
-import { getBrandTemplate, isBrandTemplateId } from "@/lib/brands/registry";
+import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
+import { prisma } from "@/lib/db";
 
 const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash";
 
@@ -31,6 +32,8 @@ export type SuggestedCampaign = {
   autoApprove: boolean;
   rationale: string;
   contentMode: CampaignContentMode;
+  campaignGoal: string;
+  contentPillars: string;
 };
 
 const VALID_THEMES: CampaignTheme[] = [
@@ -98,6 +101,14 @@ const suggestSchema: Schema = {
           postsPerRun: { type: Type.NUMBER, description: "1-3" },
           autoApprove: { type: Type.BOOLEAN, description: "default false" },
           rationale: { type: Type.STRING, description: "One sentence, must mention user hint if provided" },
+          campaignGoal: {
+            type: Type.STRING,
+            description: "One sentence: what this campaign is trying to achieve, e.g. 'Build brand awareness among pharma shippers in Southeast Asia' or 'Generate qualified leads for air-freight express services'",
+          },
+          contentPillars: {
+            type: Type.STRING,
+            description: "Comma-separated content angles for this campaign, e.g. 'Industry news commentary, Service deep-dives, Customer success stories, Regulatory updates'",
+          },
         },
         required: [
           "name",
@@ -113,6 +124,8 @@ const suggestSchema: Schema = {
           "postsPerRun",
           "autoApprove",
           "rationale",
+          "campaignGoal",
+          "contentPillars",
         ],
       },
     },
@@ -145,12 +158,21 @@ export async function POST(req: Request) {
     const body = (await req.json()) as { hint?: string; brandTemplateId?: string };
     hint = typeof body.hint === "string" ? body.hint.trim() : "";
     const raw = typeof body.brandTemplateId === "string" ? body.brandTemplateId.trim() : "";
-    if (raw && (await isBrandTemplateId(raw))) brandTemplateId = raw;
+    if (raw) {
+      // Check DB directly so newly-added brands are found even if cache hasn't parsed them yet
+      const exists = await prisma.brandTemplateMaster.findUnique({ where: { slug: raw }, select: { slug: true } });
+      if (exists || raw === "omg" || raw === "acme") brandTemplateId = raw;
+    }
   } catch {
     // no body
   }
 
-  const tpl = await getBrandTemplate(brandTemplateId);
+  const tpl = await getBrandTemplateOrDefault(brandTemplateId);
+  if (tpl.id !== brandTemplateId) {
+    console.warn(
+      `[campaigns/suggest] Template id mismatch: requested brandTemplateId="${brandTemplateId}" but resolved template id="${tpl.id}" (possible stale cache or invalid payload — check Brand Master diagnose)`
+    );
+  }
   const THEME_ORDER = ["RELIABILITY_PRO", "INNOVATION_TECH", "SPEED_URGENCY"] as const;
   const lanes = THEME_ORDER.map((id) => {
     const b = tpl.themeBundles[id];
@@ -191,7 +213,7 @@ export async function POST(req: Request) {
     const contentMode = clampContentMode(c.contentMode ?? "NEWS_DRIVEN");
     let kmode = c.keywords;
     if (contentMode === "NEWS_DRIVEN" && !String(kmode ?? "").trim()) {
-      kmode = "logistics air freight industry news";
+      kmode = tpl.industryContext.split("/")[0].trim();
     }
     if (contentMode === "SELF_PROMO") {
       kmode = typeof kmode === "string" ? kmode.trim() : "";
@@ -212,6 +234,8 @@ export async function POST(req: Request) {
       postsPerRun: Math.max(1, Math.min(3, Math.floor(Number(c.postsPerRun) || 1))),
       autoApprove: Boolean(c.autoApprove),
       rationale: c.rationale,
+      campaignGoal: String(c.campaignGoal ?? "").trim(),
+      contentPillars: String(c.contentPillars ?? "").trim(),
     };
   });
 

@@ -4,6 +4,7 @@ import { acmeTemplate } from "./templates/acme";
 import { omgTemplate } from "./templates/omg";
 import {
   ensureBrandTemplatesLoaded,
+  ensureBrandTemplateFromDb,
   getMergedTemplateMapOrThrow,
   invalidateBrandTemplateCache,
 } from "./template-cache";
@@ -48,16 +49,19 @@ export async function listBrandTemplatesForApi(): Promise<{ id: string; displayN
 
 export async function isBrandTemplateId(id: string): Promise<boolean> {
   await ensureBrandTemplatesLoaded();
-  return getMergedTemplateMapOrThrow().has(id);
+  const m = getMergedTemplateMapOrThrow();
+  if (m.has(id)) return true;
+  const loaded = await ensureBrandTemplateFromDb(id);
+  return loaded != null;
 }
 
 export async function getBrandTemplate(id: string): Promise<BrandPromptTemplate> {
   await ensureBrandTemplatesLoaded();
-  const t = getMergedTemplateMapOrThrow().get(id);
-  if (!t) {
-    throw new Error(`Unknown brand template: ${id}`);
-  }
-  return t;
+  const m = getMergedTemplateMapOrThrow();
+  if (m.has(id)) return m.get(id)!;
+  const loaded = await ensureBrandTemplateFromDb(id);
+  if (loaded) return loaded;
+  throw new Error(`Unknown brand template: ${id}`);
 }
 
 export async function getBrandTemplateOrDefault(
@@ -65,9 +69,16 @@ export async function getBrandTemplateOrDefault(
 ): Promise<BrandPromptTemplate> {
   await ensureBrandTemplatesLoaded();
   const m = getMergedTemplateMapOrThrow();
-  if (id && m.has(id)) {
-    return m.get(id)!;
+  const key = typeof id === "string" ? id.trim() : "";
+  if (!key) {
+    return m.get(DEFAULT_BRAND)!;
   }
+  if (m.has(key)) {
+    return m.get(key)!;
+  }
+  const loaded = await ensureBrandTemplateFromDb(key);
+  if (loaded) return loaded;
+  console.warn(`[brands] Unknown brand template "${key}", falling back to ${DEFAULT_BRAND}`);
   return m.get(DEFAULT_BRAND)!;
 }
 

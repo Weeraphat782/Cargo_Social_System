@@ -27,6 +27,8 @@ export default function BrandMasterEditPage() {
   const [jsonText, setJsonText] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Schema validation from /api/brand-masters/[slug]/diagnose */
+  const [payloadSchemaOk, setPayloadSchemaOk] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,14 @@ export default function BrandMasterEditPage() {
     setDisplayName(data.displayName);
     setJsonText(JSON.stringify(data.payload, null, 2));
     setLoading(false);
+
+    const diagRes = await fetch(`/api/brand-masters/${encodeURIComponent(slug)}/diagnose`);
+    if (diagRes.ok) {
+      const diag = (await diagRes.json()) as { ok?: boolean };
+      setPayloadSchemaOk(Boolean(diag.ok));
+    } else {
+      setPayloadSchemaOk(null);
+    }
   }, [slug]);
 
   useEffect(() => {
@@ -117,6 +127,22 @@ export default function BrandMasterEditPage() {
         subtitle={`Template JSON for slug ${row.slug}. Must match the app schema (services, themeBundles, suggestCampaign, selfPromo, etc.).`}
         icon={<Palette size={28} strokeWidth={1.75} />}
       />
+      {payloadSchemaOk === false && (
+        <p
+          style={{
+            fontSize: 13,
+            color: "var(--warning)",
+            marginBottom: 12,
+            padding: "12px 14px",
+            background: "var(--warning-dim)",
+            borderRadius: 8,
+            border: "1px solid var(--ring-warning)",
+          }}
+        >
+          Payload does not match the required schema — campaign AI may fall back to the default brand (e.g. OMG). Fix JSON fields (see server logs or GET{" "}
+          <code style={{ fontSize: 11 }}>/api/brand-masters/{row.slug}/diagnose</code>) then Save.
+        </p>
+      )}
       {err && (
         <p
           style={{
@@ -177,7 +203,7 @@ export default function BrandMasterEditPage() {
             alignSelf: "flex-start",
           }}
         >
-          <BrandMasterPayloadForm jsonText={jsonText} onJsonTextChange={setJsonText} />
+          <BrandMasterPayloadForm slug={slug} jsonText={jsonText} onJsonTextChange={setJsonText} />
         </div>
       </div>
 

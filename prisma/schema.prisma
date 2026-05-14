@@ -96,9 +96,11 @@ model Post {
   topic        Topic?     @relation(fields: [topicId], references: [id])
   campaignId   String?
   campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  sourceNewsId String?
-  sourceNews   NewsItem?  @relation(fields: [sourceNewsId], references: [id])
-  scheduledAt  DateTime?
+  sourceNewsId  String?
+  sourceNews    NewsItem?  @relation(fields: [sourceNewsId], references: [id])
+  /// Content pillar assigned to this post (rotated per-post within a campaign run)
+  contentPillar String?
+  scheduledAt   DateTime?
   publishedAt  DateTime?
   failureCount Int        @default(0)
   lastError    String?    @db.Text
@@ -106,6 +108,7 @@ model Post {
   updatedAt    DateTime   @updatedAt
   variants     PostVariant[]
   publishLogs  PublishLog[]
+  postPlan     PostPlan?
 
   @@index([status, createdAt(sort: Desc)])
   @@index([status, scheduledAt])
@@ -158,10 +161,16 @@ model Campaign {
   endAt         DateTime?
   nextRunAt     DateTime?
   lastRunAt     DateTime?
+  /// Per-platform copy guidance: { FACEBOOK?: string, INSTAGRAM?: string, LINKEDIN?: string, OMG?: string }
+  platformStrategies   Json?
+  /// Up to 4 R2 image URLs generated for visual direction reference
+  moodboardImages      Json?
+  moodboardGeneratedAt DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   posts         Post[]
   runs          CampaignRun[]
+  plans         PostPlan[]
 
   @@index([status, nextRunAt])
   @@index([updatedAt(sort: Desc)])
@@ -231,6 +240,54 @@ model PlatformCredential {
   encryptedPayload String         @db.Text
   expiresAt        DateTime?
   updatedAt        DateTime       @updatedAt
+}
+
+model Persona {
+  id           String   @id @default(cuid())
+  name         String
+  /// Job title / role — e.g. "CFO at mid-size logistics company"
+  role         String?  @db.Text
+  /// Age range, region, company size, etc.
+  demographics String?  @db.Text
+  /// Core pain points — what keeps them up at night
+  painPoints   String?  @db.Text
+  /// What they want to achieve
+  goals        String?  @db.Text
+  /// Full persona description injected into AI prompts — can be auto-composed or manually written
+  description  String   @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt(sort: Desc)])
+}
+
+enum PlanStatus {
+  PENDING
+  EXECUTED
+  SKIPPED
+}
+
+model PostPlan {
+  id           String     @id @default(cuid())
+  campaignId   String
+  campaign     Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  /// The wall-clock datetime this slot is planned to execute (matches agent run time)
+  scheduledFor DateTime
+  /// 0-based index of this post within the run (for postsPerRun > 1)
+  indexInRun   Int        @default(0)
+  pillar       String?    @db.Text
+  brief        String?    @db.Text
+  keywordHint  String?    @db.Text
+  status       PlanStatus @default(PENDING)
+  /// Set after agent generates a post from this plan
+  postId       String?    @unique
+  post         Post?      @relation(fields: [postId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([campaignId, scheduledFor, indexInRun])
+  @@index([campaignId, scheduledFor])
+  @@index([scheduledFor, status])
 }
 
 model PublishLog {

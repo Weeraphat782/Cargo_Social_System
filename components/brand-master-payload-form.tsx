@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 import type { CampaignTheme } from "@prisma/client";
 import { brandPromptTemplatePayloadZ } from "@/lib/brands/payload-schema";
@@ -8,6 +8,7 @@ import { brandPromptTemplatePayloadZ } from "@/lib/brands/payload-schema";
 type Payload = z.infer<typeof brandPromptTemplatePayloadZ>;
 
 type Props = {
+  slug: string;
   jsonText: string;
   onJsonTextChange: (next: string) => void;
 };
@@ -54,7 +55,11 @@ function commaJoin(arr: string[]): string {
   return arr.join(", ");
 }
 
-export function BrandMasterPayloadForm({ jsonText, onJsonTextChange }: Props) {
+export function BrandMasterPayloadForm({ slug, jsonText, onJsonTextChange }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+
   const commit = useCallback(
     (updater: (prev: Payload) => Payload) => {
       const trimmed = jsonText.trim();
@@ -76,6 +81,53 @@ export function BrandMasterPayloadForm({ jsonText, onJsonTextChange }: Props) {
       }
     },
     [jsonText, onJsonTextChange],
+  );
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      setUploading(true);
+      setUploadErr(null);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`/api/brand-masters/${encodeURIComponent(slug)}/upload`, {
+          method: "POST",
+          body: fd,
+        });
+        const json = (await res.json()) as { imageUrl?: string; error?: string };
+        if (!res.ok) { setUploadErr(json.error ?? `Error ${res.status}`); return; }
+        commit((p) => ({
+          ...p,
+          brandAssets: {
+            ...p.brandAssets,
+            referenceImages: [...(p.brandAssets?.referenceImages ?? []), json.imageUrl!],
+          },
+        }));
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [slug, commit],
+  );
+
+  const handleRemoveImage = useCallback(
+    async (imageUrl: string) => {
+      if (!confirm("Remove this reference image?")) return;
+      commit((p) => ({
+        ...p,
+        brandAssets: {
+          ...p.brandAssets,
+          referenceImages: (p.brandAssets?.referenceImages ?? []).filter((u) => u !== imageUrl),
+        },
+      }));
+      await fetch(`/api/brand-masters/${encodeURIComponent(slug)}/upload`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl }),
+      });
+    },
+    [slug, commit],
   );
 
   const result = useMemo(() => {
@@ -476,6 +528,153 @@ export function BrandMasterPayloadForm({ jsonText, onJsonTextChange }: Props) {
             }))
           }
         />
+      </div>
+
+      <div style={sectionStyle}>
+        <h4 style={lockedHeaderStyle}>Brand assets (image generation)</h4>
+        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.45 }}>
+          These fields guide AI image generation for this brand. Visual style is injected into every image brief.
+        </p>
+        <label style={fieldLabelStyle}>Primary color (hex)</label>
+        <input
+          className="omg-input"
+          style={{ ...inputBase, marginBottom: 10, maxWidth: 160 }}
+          value={d.brandAssets?.primaryColor ?? ""}
+          placeholder="#0057B7"
+          onChange={(e) =>
+            commit((p) => ({
+              ...p,
+              brandAssets: { ...p.brandAssets, primaryColor: e.target.value.trim() || undefined },
+            }))
+          }
+        />
+        <label style={fieldLabelStyle}>Secondary color (hex)</label>
+        <input
+          className="omg-input"
+          style={{ ...inputBase, marginBottom: 10, maxWidth: 160 }}
+          value={d.brandAssets?.secondaryColor ?? ""}
+          placeholder="#FF6B35"
+          onChange={(e) =>
+            commit((p) => ({
+              ...p,
+              brandAssets: { ...p.brandAssets, secondaryColor: e.target.value.trim() || undefined },
+            }))
+          }
+        />
+        <label style={fieldLabelStyle}>Typography / typeface</label>
+        <input
+          className="omg-input"
+          style={{ ...inputBase, marginBottom: 10 }}
+          value={d.brandAssets?.typography ?? ""}
+          placeholder="e.g. Geist Sans, clean modern sans-serif"
+          onChange={(e) =>
+            commit((p) => ({
+              ...p,
+              brandAssets: { ...p.brandAssets, typography: e.target.value || undefined },
+            }))
+          }
+        />
+        <label style={fieldLabelStyle}>Visual style / art direction (injected into image prompts)</label>
+        <textarea
+          className="omg-input"
+          spellCheck={false}
+          style={{ ...inputBase, minHeight: 80, marginBottom: 10, resize: "vertical" }}
+          value={d.brandAssets?.visualStyle ?? ""}
+          placeholder="e.g. Clean flat illustration, bold geometric shapes, no gradients, premium editorial photography with natural lighting"
+          onChange={(e) =>
+            commit((p) => ({
+              ...p,
+              brandAssets: { ...p.brandAssets, visualStyle: e.target.value || undefined },
+            }))
+          }
+        />
+        <label style={fieldLabelStyle}>Prompt library (one phrase per line — reusable image prompt elements)</label>
+        <textarea
+          className="omg-input"
+          spellCheck={false}
+          style={{ ...inputBase, minHeight: 80, marginBottom: 0, resize: "vertical", fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}
+          value={(d.brandAssets?.promptLibrary ?? []).join("\n")}
+          placeholder={"airport cargo terminal\nblue-toned professional lighting\nAsia-Pacific logistics context"}
+          onChange={(e) => {
+            const lines = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+            commit((p) => ({
+              ...p,
+              brandAssets: { ...p.brandAssets, promptLibrary: lines.length ? lines : undefined },
+            }));
+          }}
+        />
+
+        {/* Reference image upload */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <label style={{ ...fieldLabelStyle, marginBottom: 6 }}>
+            Reference images (max 5) — passed as visual references to AI when generating moodboard &amp; post images
+          </label>
+          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 10px", lineHeight: 1.45 }}>
+            Without reference photos the image model relies mostly on text and tends to hallucinate style and scenes. Upload at least one on-brand image so outputs anchor on your real visuals.
+          </p>
+          {/* Thumbnail grid */}
+          {(d.brandAssets?.referenceImages ?? []).length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+              {(d.brandAssets?.referenceImages ?? []).map((url) => (
+                <div
+                  key={url}
+                  style={{ position: "relative", width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)", flexShrink: 0 }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt="Brand reference"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveImage(url)}
+                    style={{
+                      position: "absolute", top: 4, right: 4,
+                      width: 20, height: 20, borderRadius: "50%",
+                      background: "rgba(0,0,0,0.6)", border: "none",
+                      color: "#fff", fontSize: 12, lineHeight: 1,
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Upload button */}
+          {(d.brandAssets?.referenceImages ?? []).length < 5 && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleUpload(file);
+                }}
+              />
+              <button
+                type="button"
+                className="omg-btn-ghost"
+                style={{ fontSize: 12 }}
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? "Uploading…" : "Upload image"}
+              </button>
+              <span style={{ marginLeft: 8, fontSize: 11, color: "var(--text-muted)" }}>
+                JPEG / PNG / WebP · max 8 MB · {5 - (d.brandAssets?.referenceImages ?? []).length} slot{5 - (d.brandAssets?.referenceImages ?? []).length !== 1 ? "s" : ""} left
+              </span>
+            </>
+          )}
+          {uploadErr && (
+            <p style={{ fontSize: 12, color: "var(--danger)", margin: "6px 0 0" }}>{uploadErr}</p>
+          )}
+        </div>
       </div>
 
       <div style={{ ...sectionStyle, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
