@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { withAiLog } from "@/lib/ai-logger";
 import { generateAndUploadImage } from "@/lib/imagegen/gemini";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
 
@@ -38,7 +39,7 @@ export async function POST(
   const colorStyle = [ba?.primaryColor, ba?.secondaryColor].filter(Boolean).join(" + ") || "Brand-consistent";
 
   const promptLibraryBlock = ba?.promptLibrary?.length
-    ? `\nBrand visual references — these specific scenes and subjects MUST guide the imagery:\n${ba.promptLibrary.slice(0, 6).map((p) => `- ${p}`).join("\n")}\n`
+    ? `\nBrand mood inspiration — these describe the kind of subject matter and atmosphere typical of this brand. Use for tone, palette, and conceptual direction; do NOT attempt to render any item literally as a named place or identifiable building:\n${ba.promptLibrary.slice(0, 6).map((p) => `- ${p}`).join("\n")}\n`
     : "";
 
   const moodboardPrompt = `Create a professional marketing campaign moodboard for a ${template.industryContext} campaign.
@@ -60,9 +61,10 @@ Color palette: ${colorStyle}
 
 REFERENCE PHOTOGRAPHS — PRIMARY VISUAL BASIS:
 When reference images are attached to this request, they are the DOMINANT anchor for palette, lighting, lens character, and photographic style. The moodboard collage must read as a natural extension of those photos — do NOT drift into a generic stock look that ignores them.
+Even when the brand text above names specific places, buildings, monasteries, dzongs, mountains, or landmarks, treat those names as MOOD references only. Render generic, plausible scenes that fit the atmosphere — never attempt to recreate a named landmark you do not know with photographic accuracy.
 
 Moodboard Must Include (weave these naturally into a unified layout):
-1. Hero photography — real environments and moments specific to ${template.industryContext}
+1. Hero photography — evocative environments and atmospheric moments that capture the essence of ${template.industryContext}
 2. Brand color palette swatches — built around ${colorStyle}
 3. Lighting mood references — quality and direction of light specific to this brand
 4. Texture and material details — surfaces and elements authentic to this world
@@ -78,18 +80,36 @@ Visual Style Requirements:
 
 ABSOLUTE REQUIREMENTS — failure to follow these is unacceptable:
 - ZERO text anywhere in the image — no words, no letters, no brand names, no logos, no watermarks, no captions, no labels of any kind
-- All photography must feel unmistakably specific to ${template.industryContext} — never generic or interchangeable with another industry
+- All visuals must evoke the world of ${template.industryContext} — never generic or interchangeable with another domain
 - Every visual element must serve the brand's world defined in the visual style above
-- Consistent visual language and color grading throughout the entire board`;
+- Consistent visual language and color grading throughout the entire board
+Final instruction: absolutely no text, no typography, no letters, no numbers, no words anywhere in any part of the image.`;
+
+  const brandRefsCount = (ba?.referenceImages ?? []).filter((u) => u?.trim()).length;
 
   try {
-    const result = await generateAndUploadImage({
-      prompt: moodboardPrompt,
-      aspect: "OMG",
-      storageKeyPrefix: `campaign/${id}/moodboard/${Date.now()}`,
-      referenceCategory: null,
-      brandReferenceUrls: ba?.referenceImages ?? null,
-    });
+    const result = await withAiLog(
+      "moodboard.generate",
+      {
+        campaignId: campaign.id,
+        brandTemplateId: campaign.brandTemplateId,
+        hasUserPrompt: Boolean(userPrompt),
+        brandRefsCount,
+        prompt: moodboardPrompt,
+      },
+      () =>
+        generateAndUploadImage({
+          prompt: moodboardPrompt,
+          aspect: "OMG",
+          storageKeyPrefix: `campaign/${id}/moodboard/${Date.now()}`,
+          referenceCategory: null,
+          brandReferenceUrls: ba?.referenceImages ?? null,
+        }),
+      (r) => ({
+        ok: Boolean(r.imageUrl && !r.imageUrl.startsWith("data:")),
+        extra: { imageUrl: r.imageUrl },
+      })
+    );
 
     if (!result.imageUrl || result.imageUrl.startsWith("data:")) {
       return NextResponse.json(

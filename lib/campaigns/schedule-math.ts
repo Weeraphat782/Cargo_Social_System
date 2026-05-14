@@ -1,6 +1,5 @@
 import { addDays, addMinutes, addWeeks } from "date-fns";
-import { toDate, formatInTimeZone } from "date-fns-tz";
-import { enUS } from "date-fns/locale";
+import { toDate } from "date-fns-tz";
 import type { Campaign, Prisma } from "@prisma/client";
 import { parseScheduleConfig } from "./schedule-config";
 
@@ -21,9 +20,60 @@ const DOW_EN = [
   "Saturday",
 ] as const;
 
+/** Cached Intl formatters — constructing them is expensive in tight loops. */
+const calendarPartsFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getCalendarPartsFormatter(timeZone: string): Intl.DateTimeFormat {
+  const tz = timeZone?.trim() || DEFAULT_TZ;
+  let f = calendarPartsFormatterCache.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      weekday: "long",
+    });
+    calendarPartsFormatterCache.set(tz, f);
+  }
+  return f;
+}
+
+/** Calendar fields for `d` in `tz` (matches prior date-fns-tz + toDate wall-clock behaviour). */
+function calendarPartsInTz(
+  d: Date,
+  tz: string
+): { year: number; month: number; day: number; weekdayLong: string } {
+  const f = getCalendarPartsFormatter(tz);
+  let year = 1970;
+  let month = 1;
+  let day = 1;
+  let weekdayLong = "Thursday";
+  for (const p of f.formatToParts(d)) {
+    if (p.type === "year") year = parseInt(p.value, 10);
+    else if (p.type === "month") month = parseInt(p.value, 10);
+    else if (p.type === "day") day = parseInt(p.value, 10);
+    else if (p.type === "weekday") weekdayLong = p.value;
+  }
+  return { year, month, day, weekdayLong };
+}
+
+function ymdStringsFromParts(parts: { year: number; month: number; day: number }): {
+  y: string;
+  m: string;
+  day: string;
+} {
+  return {
+    y: String(parts.year),
+    m: String(parts.month).padStart(2, "0"),
+    day: String(parts.day).padStart(2, "0"),
+  };
+}
+
 function dayOfWeekInTz(d: Date, tz: string): number {
-  const name = formatInTimeZone(d, tz, "EEEE", { locale: enUS });
-  return DOW_EN.indexOf(name as (typeof DOW_EN)[number]);
+  const { weekdayLong } = calendarPartsInTz(d, tz);
+  const idx = DOW_EN.indexOf(weekdayLong as (typeof DOW_EN)[number]);
+  return idx >= 0 ? idx : 0;
 }
 
 /**
@@ -33,9 +83,7 @@ export function nextWeeklySlot(anchor: Date, tz: string, dow0: number, hour: num
   for (let k = 0; k < 32; k++) {
     const d = k === 0 ? new Date(anchor) : addDays(anchor, k);
     if (dayOfWeekInTz(d, tz) !== dow0) continue;
-    const y = formatInTimeZone(d, tz, "yyyy");
-    const m = formatInTimeZone(d, tz, "MM");
-    const day = formatInTimeZone(d, tz, "dd");
+    const { y, m, day } = ymdStringsFromParts(calendarPartsInTz(d, tz));
     const iso = `${y}-${m}-${day}T${String(hour).padStart(2, "0")}:00:00`;
     const utc = toDate(iso, { timeZone: tz });
     if (utc.getTime() > anchor.getTime()) return utc;
@@ -62,9 +110,7 @@ export function nextDailySlot(
   const mm = Math.max(0, Math.min(59, minute));
   for (let k = 0; k < 400; k++) {
     const d = k === 0 ? new Date(anchor) : addDays(anchor, k);
-    const y = formatInTimeZone(d, tz, "yyyy");
-    const m = formatInTimeZone(d, tz, "MM");
-    const day = formatInTimeZone(d, tz, "dd");
+    const { y, m, day } = ymdStringsFromParts(calendarPartsInTz(d, tz));
     const iso = `${y}-${m}-${day}T${String(hour).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
     const utc = toDate(iso, { timeZone: tz });
     if (utc.getTime() > anchor.getTime()) return utc;
@@ -82,10 +128,8 @@ export function nextWallClockHmAfter(anchor: Date, tz: string, hhmm: string): Da
   const minute = parseInt(m[2], 10);
   for (let k = 0; k < 400; k++) {
     const d = k === 0 ? new Date(anchor) : addDays(anchor, k);
-    const y = formatInTimeZone(d, tz, "yyyy");
-    const mo = formatInTimeZone(d, tz, "MM");
-    const day = formatInTimeZone(d, tz, "dd");
-    const iso = `${y}-${mo}-${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+    const { y, m, day } = ymdStringsFromParts(calendarPartsInTz(d, tz));
+    const iso = `${y}-${m}-${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
     const utc = toDate(iso, { timeZone: tz });
     if (utc.getTime() > anchor.getTime()) return utc;
   }
@@ -129,8 +173,9 @@ function nextCustomDatetimeSlot(anchor: Date, tz: string, ymdHms: string[]): Dat
 }
 
 export function firstWeekdayInNextMonth(anchor: Date, tz: string, dow0: number, hour: number): Date {
-  const y = parseInt(formatInTimeZone(anchor, tz, "yyyy"), 10);
-  const mo = parseInt(formatInTimeZone(anchor, tz, "M"), 10);
+  const anchorParts = calendarPartsInTz(anchor, tz);
+  const y = anchorParts.year;
+  const mo = anchorParts.month;
   const nextMo = mo === 12 ? 1 : mo + 1;
   const nextY = mo === 12 ? y + 1 : y;
   const base = toDate(
@@ -138,15 +183,12 @@ export function firstWeekdayInNextMonth(anchor: Date, tz: string, dow0: number, 
     { timeZone: tz }
   );
   for (let d = 0; d < 7; d++) {
-    const day = addDays(base, d);
-    if (dayOfWeekInTz(day, tz) === dow0) {
-      const yy = formatInTimeZone(day, tz, "yyyy");
-      const mm = formatInTimeZone(day, tz, "MM");
-      const dd = formatInTimeZone(day, tz, "dd");
-      return toDate(
-        `${yy}-${mm}-${dd}T${String(hour).padStart(2, "0")}:00:00`,
-        { timeZone: tz }
-      );
+    const candidate = addDays(base, d);
+    if (dayOfWeekInTz(candidate, tz) === dow0) {
+      const { y: yy, m: mm, day: dd } = ymdStringsFromParts(calendarPartsInTz(candidate, tz));
+      return toDate(`${yy}-${mm}-${dd}T${String(hour).padStart(2, "0")}:00:00`, {
+        timeZone: tz,
+      });
     }
   }
   return addWeeks(anchor, 4);

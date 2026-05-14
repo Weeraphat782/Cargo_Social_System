@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
 import { GoogleGenAI } from "@google/genai";
 import { requireEnv } from "@/lib/env";
+import { withAiLog } from "@/lib/ai-logger";
+import { buildBriefPrompt, buildBriefContents } from "@/lib/planner/build-brief-prompt";
 
 function getAI() {
   return new GoogleGenAI({ apiKey: requireEnv("GEMINI_API_KEY") });
@@ -36,43 +38,65 @@ export async function POST(req: Request) {
       contentPillars: true,
       theme: true,
       brandTemplateId: true,
+      brandVoice: true,
+      description: true,
+      platforms: true,
+      platformStrategies: true,
+      moodboardImages: true,
     },
   });
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const template = await getBrandTemplateOrDefault(campaign.brandTemplateId);
-  const pillar = body.pillar ?? null;
-  const keywordHint = body.keywordHint?.trim() || campaign.keywords;
-  const scheduledDate = body.scheduledFor ? new Date(body.scheduledFor).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "the scheduled date";
 
-  const prompt = `You are a content strategist for ${template.orgDisplayName}, a ${template.industryContext} brand.
-
-Generate a SHORT 2-3 sentence editorial brief for ONE social media post scheduled for ${scheduledDate}.
-
-Campaign: "${campaign.name}"
-Content mode: ${campaign.contentMode === "NEWS_DRIVEN" ? "News-driven (will find a real news article matching the keywords at publish time)" : "Self-promo (brand storytelling, no external news required)"}
-Keywords / focus: ${keywordHint}
-${pillar ? `Content pillar for this post: ${pillar}` : ""}
-${campaign.campaignGoal ? `Campaign goal: ${campaign.campaignGoal}` : ""}
-${campaign.targetPersona ? `Target audience: ${campaign.targetPersona}` : ""}
-Theme: ${campaign.theme.replace(/_/g, " ").toLowerCase()}
-
-Write a brief that describes:
-1. What angle or topic this post will take
-2. How it serves the content pillar${pillar ? ` (${pillar})` : ""}
-3. What the audience should feel or do after reading
-
-Keep it to 2-3 sentences. Be specific — avoid generic marketing language.
-${campaign.contentLanguage === "th" ? "Write the brief in Thai (ภาษาไทย)." : "Write the brief in English."}
-
-Output ONLY the brief text. No labels, no markdown.`;
+  const built = await buildBriefPrompt({
+    template,
+    campaign: {
+      name: campaign.name,
+      keywords: campaign.keywords,
+      contentMode: campaign.contentMode,
+      contentLanguage: campaign.contentLanguage ?? "en",
+      campaignGoal: campaign.campaignGoal,
+      targetPersona: campaign.targetPersona,
+      contentPillars: campaign.contentPillars,
+      theme: campaign.theme,
+      brandTemplateId: campaign.brandTemplateId,
+      brandVoice: campaign.brandVoice,
+      description: campaign.description,
+      platforms: campaign.platforms ?? [],
+      platformStrategies: campaign.platformStrategies,
+      moodboardImages: campaign.moodboardImages,
+    },
+    slot: {
+      scheduledFor: body.scheduledFor,
+      pillar: body.pillar ?? null,
+      keywordHint: body.keywordHint ?? null,
+    },
+    includeImages: true,
+  });
 
   try {
     const ai = getAI();
-    const result = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
+    const imagesAttached = built.images.length;
+    const result = await withAiLog(
+      "planner.brief",
+      {
+        campaignId: body.campaignId,
+        brandTemplateId: campaign.brandTemplateId,
+        theme: campaign.theme,
+        prompt: built.prompt,
+        promptImages: imagesAttached,
+      },
+      () =>
+        ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: buildBriefContents(built),
+        }),
+      (res) => ({
+        responseText: res.text?.trim() ?? "",
+        ok: Boolean(res.text?.trim()),
+      })
+    );
     const brief = result.text?.trim() ?? "";
     if (!brief) return NextResponse.json({ error: "No brief generated" }, { status: 500 });
     return NextResponse.json({ brief });

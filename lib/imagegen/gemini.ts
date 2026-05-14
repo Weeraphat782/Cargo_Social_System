@@ -4,6 +4,7 @@ import {
   createPartFromText,
   createUserContent,
 } from "@google/genai";
+import { withAiLog } from "@/lib/ai-logger";
 import { requireEnv } from "@/lib/env";
 import { uploadPublicImage } from "@/lib/storage/r2";
 import { withGeminiRetry } from "@/lib/gemini-retry";
@@ -88,8 +89,8 @@ export async function generateAndUploadImage(options: {
   const fullPrompt = `${options.prompt}${sourceBlock}${styleNotesBlock}
 
 Style: professional commercial marketing photography, editorial quality, natural composition, no text overlays, no watermarks, no logos.
-IMPORTANT — avoid hallucination: Do NOT attempt to render specific real-world locations, company buildings, named landmarks, or geographic places (streets, roads, city views) that you have not seen accurately in training data. Instead, represent the concept and industry through carefully composed scenes — a well-lit facility interior, workers in action, cargo in motion — that feel authentic without claiming to depict any specific real place.
-Avoid defaulting to cold-chain pharmaceutical boxes, high-tech control rooms, or generic warehouse or dashboard interiors unless the source explicitly describes them.
+IMPORTANT — avoid hallucination: Do NOT attempt to render specific named real-world locations, identifiable buildings, or architectural structures that require accurate visual knowledge of a particular place. Represent concepts through carefully composed, emotionally resonant scenes — mood, light, atmosphere, human presence — that feel authentic without claiming to depict any specific real location. Stay true to the industry and campaign context described above; avoid defaulting to unrelated generic stock imagery.
+If any palette/style hint above names specific places, buildings, or landmarks (e.g. monasteries, named valleys, named cities), interpret those as mood and atmosphere references only — render a generic, atmospheric scene that fits the feeling, never a literal reproduction of a named real-world location.
 Aim for visual variety across different posts; prefer a concept-driven scene with real human presence over an empty or abstract stock look.
 Composition: ${label}, approximately ${w}x${h} pixels.`;
 
@@ -173,66 +174,106 @@ Composition: ${label}, approximately ${w}x${h} pixels.`;
         ])
       : fullPrompt;
 
-  const response = await withGeminiRetry(
-    `generateImage:${options.aspect}`,
-    () =>
-      ai.models.generateContent({
-        model,
-        contents,
-        config: {
-          responseModalities: ["TEXT", "IMAGE"],
-        },
-      })
+  type ImageGenOutcome = {
+    imageUrl: string;
+    prompt: string;
+    usedR2: boolean;
+    refusalHint?: string;
+  };
+
+  const outcome = await withAiLog(
+    "image.generate",
+    {
+      aspect: options.aspect,
+      model,
+      brandRefs: brandRefs.length,
+      moodboardRef: includeMoodboard,
+      categoryRefs: categorySlice.length,
+      refCategory: refCategory ?? null,
+      storageKeyPrefix: options.storageKeyPrefix,
+      prompt: fullPrompt,
+      promptImages: allRefImages.length,
+    },
+    async (): Promise<ImageGenOutcome> => {
+      const response = await withGeminiRetry(
+        `generateImage:${options.aspect}`,
+        () =>
+          ai.models.generateContent({
+            model,
+            contents,
+            config: {
+              responseModalities: ["TEXT", "IMAGE"],
+            },
+          })
+      );
+
+      let imageBytes: Buffer | null = null;
+      let mimeType = "image/png";
+      const fromGetter = response.data;
+      if (fromGetter) {
+        imageBytes = Buffer.from(fromGetter, "base64");
+      } else {
+        const parts = response.candidates?.[0]?.content?.parts ?? [];
+        for (const part of parts) {
+          const inline = part.inlineData;
+          if (inline?.data) {
+            imageBytes = Buffer.from(inline.data, "base64");
+            if (inline.mimeType) mimeType = inline.mimeType;
+            break;
+          }
+        }
+      }
+
+      if (!imageBytes?.length) {
+        // Log why so we can diagnose (refusal, safety block, quota, etc.)
+        const finishReason = response.candidates?.[0]?.finishReason;
+        const textParts = response.candidates?.[0]?.content?.parts
+          ?.map((p) => p.text)
+          .filter(Boolean)
+          .join(" ");
+        console.error(
+          `[imagegen] No image bytes returned (model=${model}, aspect=${options.aspect}). finishReason=${finishReason ?? "n/a"}; textParts=${textParts?.slice(0, 300) ?? "n/a"}`
+        );
+        // Dev fallback: 1x1 transparent PNG as data URL (avoid breaking queue)
+        const b64 =
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        const dataUrl = `data:image/png;base64,${b64}`;
+        return {
+          imageUrl: dataUrl,
+          prompt: fullPrompt,
+          usedR2: false,
+          refusalHint:
+            textParts?.trim() ||
+            (finishReason ? `finishReason=${finishReason}` : undefined),
+        };
+      }
+
+      const hasR2 =
+        Boolean(process.env.R2_ACCESS_KEY_ID) &&
+        Boolean(process.env.R2_SECRET_ACCESS_KEY) &&
+        Boolean(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID) &&
+        Boolean(process.env.R2_PUBLIC_BUCKET_NAME || process.env.R2_BUCKET) &&
+        Boolean(process.env.R2_PUBLIC_URL || process.env.R2_PUBLIC_BASE_URL);
+
+      if (!hasR2) {
+        const dataUrl = `data:${mimeType};base64,${imageBytes.toString("base64")}`;
+        return { imageUrl: dataUrl, prompt: fullPrompt, usedR2: false };
+      }
+
+      const ext = mimeType.split("/")[1]?.split(";")[0] || "png";
+      const key = `${options.storageKeyPrefix}/${Date.now()}-${options.aspect.toLowerCase()}.${ext}`;
+      const url = await uploadPublicImage(key, imageBytes, mimeType);
+      return { imageUrl: url, prompt: fullPrompt, usedR2: true };
+    },
+    (out) => ({
+      ok: true,
+      extra: {
+        imageUrl: out.imageUrl,
+        usedR2: out.usedR2,
+      },
+      responseText: out.refusalHint,
+    })
   );
 
-  let imageBytes: Buffer | null = null;
-  let mimeType = "image/png";
-  const fromGetter = response.data;
-  if (fromGetter) {
-    imageBytes = Buffer.from(fromGetter, "base64");
-  } else {
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
-    for (const part of parts) {
-      const inline = part.inlineData;
-      if (inline?.data) {
-        imageBytes = Buffer.from(inline.data, "base64");
-        if (inline.mimeType) mimeType = inline.mimeType;
-        break;
-      }
-    }
-  }
-
-  if (!imageBytes?.length) {
-    // Log why so we can diagnose (refusal, safety block, quota, etc.)
-    const finishReason = response.candidates?.[0]?.finishReason;
-    const textParts = response.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text)
-      .filter(Boolean)
-      .join(" ");
-    console.error(
-      `[imagegen] No image bytes returned (model=${model}, aspect=${options.aspect}). finishReason=${finishReason ?? "n/a"}; textParts=${textParts?.slice(0, 300) ?? "n/a"}`
-    );
-    // Dev fallback: 1x1 transparent PNG as data URL (avoid breaking queue)
-    const b64 =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-    const dataUrl = `data:image/png;base64,${b64}`;
-    return { imageUrl: dataUrl, prompt: fullPrompt };
-  }
-
-  const hasR2 =
-    Boolean(process.env.R2_ACCESS_KEY_ID) &&
-    Boolean(process.env.R2_SECRET_ACCESS_KEY) &&
-    Boolean(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID) &&
-    Boolean(process.env.R2_PUBLIC_BUCKET_NAME || process.env.R2_BUCKET) &&
-    Boolean(process.env.R2_PUBLIC_URL || process.env.R2_PUBLIC_BASE_URL);
-
-  if (!hasR2) {
-    const dataUrl = `data:${mimeType};base64,${imageBytes.toString("base64")}`;
-    return { imageUrl: dataUrl, prompt: fullPrompt };
-  }
-
-  const ext = mimeType.split("/")[1]?.split(";")[0] || "png";
-  const key = `${options.storageKeyPrefix}/${Date.now()}-${options.aspect.toLowerCase()}.${ext}`;
-  const url = await uploadPublicImage(key, imageBytes, mimeType);
-  return { imageUrl: url, prompt: fullPrompt };
+  return { imageUrl: outcome.imageUrl, prompt: outcome.prompt };
 }

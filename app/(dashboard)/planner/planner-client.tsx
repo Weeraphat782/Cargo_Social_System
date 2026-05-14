@@ -446,23 +446,49 @@ export default function PlannerClient() {
   async function handlePlanAll() {
     if (unplannedSlots.length === 0) return;
     setBatchState({ mode: "plan", done: 0, total: unplannedSlots.length });
+    const CHUNK = 50;
     let done = 0;
     const updated: Slot[] = [];
-    for (const slot of unplannedSlots) {
+
+    for (let i = 0; i < unplannedSlots.length; i += CHUNK) {
+      const chunk = unplannedSlots.slice(i, i + CHUNK);
       try {
-        const res = await fetch("/api/planner/plans", {
+        const res = await fetch("/api/planner/plans/batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ campaignId: slot.campaignId, scheduledFor: slot.scheduledFor, indexInRun: slot.indexInRun, pillar: slot.pillar ?? null, brief: null, keywordHint: null }),
+          body: JSON.stringify({
+            slots: chunk.map((s) => ({
+              campaignId: s.campaignId,
+              scheduledFor: s.scheduledFor,
+              indexInRun: s.indexInRun,
+              pillar: s.pillar ?? null,
+              brief: null,
+              keywordHint: null,
+            })),
+          }),
         });
         if (res.ok) {
-          const data = await res.json();
-          updated.push({ ...slot, planStatus: "PENDING", planId: data.id, pillar: data.pillar });
+          const data = (await res.json()) as { plans?: { id: string; pillar: string | null }[] };
+          const plans = data.plans ?? [];
+          chunk.forEach((slot, j) => {
+            const plan = plans[j];
+            if (plan) {
+              updated.push({
+                ...slot,
+                planStatus: "PENDING",
+                planId: plan.id,
+                pillar: plan.pillar ?? slot.pillar,
+              });
+            }
+          });
         }
-      } catch { /* continue */ }
-      done++;
-      setBatchState({ mode: "plan", done, total: unplannedSlots.length });
+      } catch {
+        /* continue */
+      }
+      done += chunk.length;
+      setBatchState({ mode: "plan", done: Math.min(done, unplannedSlots.length), total: unplannedSlots.length });
     }
+
     setSlots((prev) => {
       const next = [...prev];
       for (const u of updated) {

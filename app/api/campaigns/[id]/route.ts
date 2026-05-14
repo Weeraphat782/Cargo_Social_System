@@ -9,6 +9,7 @@ import {
 import { revalidateTag } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { fetchCampaignListRowById } from "@/lib/campaigns-list-payload";
 import { computeNextRun } from "@/lib/campaigns/scheduler";
 import { previewNextRuns, previewNextRunsUntil } from "@/lib/campaigns/schedule-math";
 import {
@@ -397,7 +398,8 @@ export async function PATCH(
 
   const c = await prisma.campaign.update({ where: { id }, data: u });
   revalidateTag("campaigns");
-  return NextResponse.json(c);
+  const listRow = await fetchCampaignListRowById(id);
+  return NextResponse.json(listRow ?? c);
 }
 
 export async function DELETE(

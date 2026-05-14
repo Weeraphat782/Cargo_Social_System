@@ -55,7 +55,7 @@ export function getExpectedPostBudget(p: CampaignProgressBarInput): number | nul
   if (Number.isNaN(end.getTime())) return null;
   const c = toComputeInput(p);
   const start = new Date(p.startAt);
-  const runDates = previewNextRunsInRange(c, start, end, 500);
+  const runDates = previewNextRunsInRange(c, start, end, 365);
   const perRun = Math.max(1, Math.min(5, p.postsPerRun || 1));
   return runDates.length * perRun;
 }

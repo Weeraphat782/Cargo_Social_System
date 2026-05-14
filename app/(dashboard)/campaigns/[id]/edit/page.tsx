@@ -12,6 +12,7 @@ import {
   defaultCampaignFormFieldsValue,
   CampaignFormFields,
   type CampaignFormFieldsValue,
+  type BrandOption,
 } from "../../campaign-form-fields";
 import { MAX_PUBLISH_TIME_SLOTS, parsePublishTimesFromText } from "@/lib/campaigns/publish-times";
 
@@ -57,7 +58,7 @@ export default function EditCampaignPage() {
   const [status, setStatus] = useState<CampaignStatus | null>(null);
   const [form, setForm] = useState<CampaignFormFieldsValue>(() => defaultCampaignFormFieldsValue());
   const [error, setError] = useState<string | null>(null);
-  const [brandOptions, setBrandOptions] = useState<{ id: string; displayName: string }[]>([
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>([
     { id: "omg", displayName: "OMG" },
     { id: "acme", displayName: "Acme (demo)" },
   ]);
@@ -85,7 +86,7 @@ export default function EditCampaignPage() {
     void (async () => {
       const res = await fetch("/api/brands");
       if (!res.ok) return;
-      const data = (await res.json()) as { brands?: { id: string; displayName: string }[] };
+      const data = (await res.json()) as { brands?: BrandOption[] };
       if (data.brands?.length) setBrandOptions(data.brands);
     })();
   }, []);

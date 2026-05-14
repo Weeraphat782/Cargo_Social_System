@@ -13,6 +13,18 @@ export const THEME_LANES: { id: CampaignTheme; label: string }[] = [
   { id: "SPEED_URGENCY", label: "Speed & time-critical" },
 ];
 
+export type BrandThemeLabel = {
+  label: string;
+  angle: string;
+  leadServiceName: string;
+};
+
+export type BrandOption = {
+  id: string;
+  displayName: string;
+  themeLabels?: Partial<Record<CampaignTheme, BrandThemeLabel>>;
+};
+
 export const PLATFORM_OPTIONS: { v: Platform; label: string }[] = [
   { v: "FACEBOOK", label: "Facebook" },
   { v: "INSTAGRAM", label: "Instagram" },
@@ -71,7 +83,7 @@ type Props = {
   onAdvancedOpenChange: (open: boolean) => void;
   /** When true, advanced fields are always shown (no collapsible details) */
   alwaysShowAdvanced?: boolean;
-  brandOptions: { id: string; displayName: string }[];
+  brandOptions: BrandOption[];
 };
 
 export function defaultCampaignFormFieldsValue(): CampaignFormFieldsValue {
@@ -344,6 +356,8 @@ export function CampaignFormFields({
       .catch(() => {});
   }, []);
 
+  const selectedBrand = brandOptions.find((b) => b.id === value.brandTemplateId);
+
   const {
     name,
     brandTemplateId,
@@ -610,14 +624,57 @@ export function CampaignFormFields({
             </label>
 
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Theme lane</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Theme lane</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.4 }}>
+                The lane name is fixed — the brand-specific label below shows how this brand interprets each lane (drives image style and tone).
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {THEME_LANES.map((t) => (
-                  <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, padding: "9px 12px", borderRadius: 7, border: `1px solid ${theme === t.id ? "var(--accent)" : "var(--border)"}`, background: theme === t.id ? "var(--accent-dim)" : "var(--bg-surface)", cursor: "pointer" }}>
-                    <input type="radio" name={`${idPrefix}theme`} checked={theme === t.id} onChange={() => onChange({ theme: t.id })} style={{ accentColor: "var(--accent)" }} />
-                    {t.label}
-                  </label>
-                ))}
+                {THEME_LANES.map((t) => {
+                  const brandLabel = selectedBrand?.themeLabels?.[t.id];
+                  const isActive = theme === t.id;
+                  return (
+                    <label
+                      key={t.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        fontSize: 12,
+                        padding: "10px 12px",
+                        borderRadius: 7,
+                        border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+                        background: isActive ? "var(--accent-dim)" : "var(--bg-surface)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name={`${idPrefix}theme`}
+                        checked={isActive}
+                        onChange={() => onChange({ theme: t.id })}
+                        style={{ accentColor: "var(--accent)", marginTop: 2 }}
+                      />
+                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+                        <span style={{ fontWeight: 600 }}>{t.label}</span>
+                        {brandLabel ? (
+                          <span style={{ fontSize: 11, color: "var(--accent)", lineHeight: 1.35 }}>
+                            For this brand: <strong>{brandLabel.label}</strong>
+                            {brandLabel.leadServiceName ? ` · ${brandLabel.leadServiceName}` : ""}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", fontStyle: "italic" }}>
+                            No brand-specific label — fix this brand’s themeBundles JSON.
+                          </span>
+                        )}
+                        {brandLabel?.angle ? (
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4 }}>
+                            {brandLabel.angle}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

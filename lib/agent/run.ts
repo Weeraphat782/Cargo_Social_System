@@ -17,6 +17,7 @@ import { parsePublishTimesJson } from "@/lib/campaigns/publish-times";
 import { requireEnv } from "@/lib/env";
 import { searchNews, searchNewsWithGemini, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
+import { logAiCall, withAiLog } from "@/lib/ai-logger";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import {
   buildCampaignNewsDraftPrompt,
@@ -206,7 +207,9 @@ export function composeImageBrief(
     lines.push(`Mood: ${mood}.`);
   }
   if (options.paletteHint?.trim()) {
-    lines.push(`Palette / lighting: ${options.paletteHint.trim()}.`);
+    lines.push(
+      `Mood, palette and atmosphere (treat any named locations, landmarks, or architectural styles as inspiration only — never render as a specific real place): ${options.paletteHint.trim()}.`
+    );
   }
   return lines.join("\n");
 }
@@ -265,14 +268,28 @@ export async function draftWithGemini(
   );
 
   const ai = getGenAI();
-  const response = await withGeminiRetry("draftWithGemini", () =>
-    ai.models.generateContent({
+  const response = await withAiLog(
+    "draft.topicNews",
+    {
       model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: draftResponseSchema,
-      },
+      theme: template.id,
+      contentLanguage: "en",
+      prompt,
+    },
+    () =>
+      withGeminiRetry("draftWithGemini", () =>
+        ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: draftResponseSchema,
+          },
+        })
+      ),
+    (res) => ({
+      responseText: res.text ?? "",
+      ok: Boolean(res.text),
     })
   );
 
@@ -320,14 +337,28 @@ export async function draftWithGeminiForCampaign(
   );
 
   const ai = getGenAI();
-  const response = await withGeminiRetry("draftWithGeminiForCampaign", () =>
-    ai.models.generateContent({
+  const response = await withAiLog(
+    "draft.campaignNews",
+    {
       model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: draftResponseSchema,
-      },
+      theme: input.theme.id,
+      contentLanguage: input.contentLanguage ?? "en",
+      prompt,
+    },
+    () =>
+      withGeminiRetry("draftWithGeminiForCampaign", () =>
+        ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: draftResponseSchema,
+          },
+        })
+      ),
+    (res) => ({
+      responseText: res.text ?? "",
+      ok: Boolean(res.text),
     })
   );
 
@@ -375,14 +406,28 @@ export async function draftWithGeminiForPromoCampaign(
   );
 
   const ai = getGenAI();
-  const response = await withGeminiRetry("draftWithGeminiForPromoCampaign", () =>
-    ai.models.generateContent({
+  const response = await withAiLog(
+    "draft.campaignPromo",
+    {
       model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: draftResponseSchema,
-      },
+      theme: input.theme.id,
+      contentLanguage: input.contentLanguage ?? "en",
+      prompt,
+    },
+    () =>
+      withGeminiRetry("draftWithGeminiForPromoCampaign", () =>
+        ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: draftResponseSchema,
+          },
+        })
+      ),
+    (res) => ({
+      responseText: res.text ?? "",
+      ok: Boolean(res.text),
     })
   );
 
@@ -687,6 +732,17 @@ export async function runAgentForCampaign(
       "Alternative angle or fresh perspective on the same subject.",
     ];
     const generatedImages: { url: string; prompt: string }[] = [];
+    logAiCall("agent.post.imageBatch", {
+      phase: "start",
+      campaignId: campaign.id,
+      postIndex: i,
+      imageCount,
+      aspect,
+      theme: theme.id,
+      brandRefs: (template.brandAssets?.referenceImages ?? []).filter((u) => u?.trim()).length,
+      moodboard: Boolean(moodboardReferenceUrl),
+      briefLen: imageBrief.length,
+    });
     for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
       const variantBrief =
         imageCount > 1

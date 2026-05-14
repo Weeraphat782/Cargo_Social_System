@@ -10,6 +10,7 @@ import {
   defaultCampaignFormFieldsValue,
   CampaignFormFields,
   type CampaignFormFieldsValue,
+  type BrandOption,
 } from "../campaign-form-fields";
 import { defaultScheduleValue, endOfDayYmdToIso } from "../schedule-editor";
 import { MAX_PUBLISH_TIME_SLOTS, parsePublishTimesFromText } from "@/lib/campaigns/publish-times";
@@ -40,7 +41,7 @@ const DOW: { v: number; label: string }[] = [
   { v: 3, label: "Wed" }, { v: 4, label: "Thu" }, { v: 5, label: "Fri" }, { v: 6, label: "Sat" },
 ];
 
-const DEFAULT_BRAND_OPTIONS = [
+const DEFAULT_BRAND_OPTIONS: BrandOption[] = [
   { id: "omg", displayName: "OMG" },
   { id: "acme", displayName: "Acme (demo)" },
 ];
@@ -48,7 +49,7 @@ const DEFAULT_BRAND_OPTIONS = [
 export default function NewCampaignPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("chooser");
-  const [brandOptions, setBrandOptions] = useState(DEFAULT_BRAND_OPTIONS);
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>(DEFAULT_BRAND_OPTIONS);
   const [form, setForm] = useState<CampaignFormFieldsValue>(() => defaultCampaignFormFieldsValue());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export default function NewCampaignPage() {
   useEffect(() => {
     fetch("/api/brands")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { brands?: { id: string; displayName: string }[] } | null) => {
+      .then((d: { brands?: BrandOption[] } | null) => {
         if (d?.brands?.length) setBrandOptions(d.brands);
       })
       .catch(() => {});

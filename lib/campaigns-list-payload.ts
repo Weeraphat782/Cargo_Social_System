@@ -62,52 +62,45 @@ export const fetchCampaignsListForPage = unstable_cache(
   { tags: ["campaigns"], revalidate: 30 }
 );
 
-async function fetchCampaignsListImpl(): Promise<CampaignListRowJson[]> {
-  const rows = await prisma.campaign.findMany({
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      theme: true,
-      contentMode: true,
-      cadence: true,
-      keywords: true,
-      nextRunAt: true,
-      autoApprove: true,
-      publishHourOfDay: true,
-      publishMinuteOfHour: true,
-      publishSpacingMinutes: true,
-      publishTimes: true,
-      timezone: true,
-      startAt: true,
-      endAt: true,
-      dayOfWeek: true,
-      hourOfDay: true,
-      postsPerRun: true,
-      imagesPerPost: true,
-      totalPostsCap: true,
-      customCron: true,
-      scheduleConfig: true,
-      platforms: true,
-      _count: { select: { posts: true, runs: true } },
-    },
-  });
-  const ids = rows.map((r) => r.id);
-  const brandById = await getCampaignBrandTemplateIds(ids);
-  const publishedGroups =
-    ids.length > 0
-      ? await prisma.post.groupBy({
-          by: ["campaignId"],
-          where: { campaignId: { in: ids }, status: PostStatus.PUBLISHED },
-          _count: { _all: true },
-        })
-      : [];
-  const publishedBy = new Map(publishedGroups.map((g) => [g.campaignId, g._count._all]));
-  return rows.map((c) => ({
+const campaignListRowSelect = {
+  id: true,
+  name: true,
+  status: true,
+  theme: true,
+  contentMode: true,
+  cadence: true,
+  keywords: true,
+  nextRunAt: true,
+  autoApprove: true,
+  publishHourOfDay: true,
+  publishMinuteOfHour: true,
+  publishSpacingMinutes: true,
+  publishTimes: true,
+  timezone: true,
+  startAt: true,
+  endAt: true,
+  dayOfWeek: true,
+  hourOfDay: true,
+  postsPerRun: true,
+  imagesPerPost: true,
+  totalPostsCap: true,
+  customCron: true,
+  scheduleConfig: true,
+  platforms: true,
+  _count: { select: { posts: true, runs: true } },
+} as const;
+
+type CampaignListRowDb = Prisma.CampaignGetPayload<{ select: typeof campaignListRowSelect }>;
+
+function mapCampaignRowToListJson(
+  c: CampaignListRowDb,
+  brandTemplateId: string,
+  publishedCount: number
+): CampaignListRowJson {
+  return {
     id: c.id,
     name: c.name,
-    brandTemplateId: brandById.get(c.id) ?? "omg",
+    brandTemplateId,
     status: c.status,
     theme: c.theme,
     contentMode: c.contentMode,
@@ -131,6 +124,41 @@ async function fetchCampaignsListImpl(): Promise<CampaignListRowJson[]> {
     scheduleConfig: c.scheduleConfig,
     platforms: c.platforms,
     _count: c._count,
-    publishedCount: publishedBy.get(c.id) ?? 0,
-  }));
+    publishedCount,
+  };
+}
+
+/** Fresh list row for PATCH responses (not cached). */
+export async function fetchCampaignListRowById(id: string): Promise<CampaignListRowJson | null> {
+  const row = await prisma.campaign.findUnique({
+    where: { id },
+    select: campaignListRowSelect,
+  });
+  if (!row) return null;
+  const brandById = await getCampaignBrandTemplateIds([id]);
+  const publishedCount = await prisma.post.count({
+    where: { campaignId: id, status: PostStatus.PUBLISHED },
+  });
+  return mapCampaignRowToListJson(row, brandById.get(id) ?? "omg", publishedCount);
+}
+
+async function fetchCampaignsListImpl(): Promise<CampaignListRowJson[]> {
+  const rows = await prisma.campaign.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: campaignListRowSelect,
+  });
+  const ids = rows.map((r) => r.id);
+  const brandById = await getCampaignBrandTemplateIds(ids);
+  const publishedGroups =
+    ids.length > 0
+      ? await prisma.post.groupBy({
+          by: ["campaignId"],
+          where: { campaignId: { in: ids }, status: PostStatus.PUBLISHED },
+          _count: { _all: true },
+        })
+      : [];
+  const publishedBy = new Map(publishedGroups.map((g) => [g.campaignId, g._count._all]));
+  return rows.map((c) =>
+    mapCampaignRowToListJson(c, brandById.get(c.id) ?? "omg", publishedBy.get(c.id) ?? 0)
+  );
 }

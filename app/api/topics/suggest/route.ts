@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { Schema } from "@google/genai";
 import { auth } from "@/auth";
 import { requireEnv } from "@/lib/env";
+import { withAiLog } from "@/lib/ai-logger";
 
 export type SuggestedTopic = {
   name: string;
@@ -80,14 +81,27 @@ For each topic, think about:
 
 Make topics diverse across: cold chain/pharma, AI/tech in logistics, industry regulations, sustainability in freight, time-critical cargo, supply chain resilience, aviation cargo trends. All must be relevant to air freight / specialized logistics.`;
 
-  const res = await ai.models.generateContent({
-    model: TEXT_MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: suggestResponseSchema,
+  const res = await withAiLog(
+    "topic.suggest",
+    {
+      brandTemplateId: "omg",
+      hint: "",
+      prompt,
     },
-  });
+    () =>
+      ai.models.generateContent({
+        model: TEXT_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: suggestResponseSchema,
+        },
+      }),
+    (r) => ({
+      responseText: r.text ?? "",
+      ok: Boolean(r.text),
+    })
+  );
 
   const text = res.text;
   if (!text) {

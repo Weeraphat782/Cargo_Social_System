@@ -9,6 +9,7 @@ import type {
 import { auth } from "@/auth";
 import { requireEnv } from "@/lib/env";
 import { withGeminiRetry } from "@/lib/gemini-retry";
+import { withAiLog } from "@/lib/ai-logger";
 import { buildSuggestCampaignPrompt } from "@/lib/brands/build-prompts";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
 import { prisma } from "@/lib/db";
@@ -191,15 +192,28 @@ export async function POST(req: Request) {
 
   const ai = new GoogleGenAI({ apiKey: requireEnv("GEMINI_API_KEY") });
 
-  const res = await withGeminiRetry("campaignSuggest", () =>
-    ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: suggestSchema,
-        temperature: 1,
-      },
+  const res = await withAiLog(
+    "campaign.suggest",
+    {
+      brandTemplateId,
+      hint,
+      prompt,
+    },
+    () =>
+      withGeminiRetry("campaignSuggest", () =>
+        ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: suggestSchema,
+            temperature: 1,
+          },
+        })
+      ),
+    (r) => ({
+      responseText: r.text ?? "",
+      ok: Boolean(r.text),
     })
   );
 

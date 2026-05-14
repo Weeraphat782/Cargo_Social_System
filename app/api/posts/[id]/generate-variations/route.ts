@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Platform } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { logAiCall } from "@/lib/ai-logger";
 import { generateAndUploadImage, ASPECT_PRESETS } from "@/lib/imagegen/gemini";
 import { resolveCampaignImageRefs } from "@/lib/brands/campaign-image-refs";
 
@@ -44,6 +45,7 @@ export async function POST(
         sourceNews: { select: { title: true, snippet: true } },
         campaign: {
           select: {
+            id: true,
             name: true,
             description: true,
             keywords: true,
@@ -83,6 +85,15 @@ export async function POST(
   const platformSlug = variant.platform.toLowerCase();
 
   try {
+    logAiCall("post.generateVariation", {
+      phase: "start",
+      postId,
+      campaignId: post?.campaign?.id ?? null,
+      aspect: aspectFor[variant.platform],
+      brandRefs: brandReferenceUrls?.length ?? 0,
+      moodboard: Boolean(moodboardReferenceUrl),
+      variationCount: count,
+    });
     const candidates = await Promise.all(
       Array.from({ length: count }, (_, idx) =>
         generateAndUploadImage({

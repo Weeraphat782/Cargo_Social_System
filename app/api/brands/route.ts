@@ -1,26 +1,76 @@
 import { NextResponse } from "next/server";
+import type { CampaignTheme } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { acmeTemplate } from "@/lib/brands/templates/acme";
+import { omgTemplate } from "@/lib/brands/templates/omg";
+import { brandPromptTemplatePayloadZ } from "@/lib/brands/payload-schema";
+import type { BrandPromptTemplate, ThemeBundle } from "@/lib/brands/types";
 
-const CODE_BRAND_DEFAULTS: { id: string; displayName: string }[] = [
-  { id: "omg", displayName: "OMG" },
-  { id: "acme", displayName: "Acme (demo)" },
+type ThemeLabel = {
+  label: string;
+  angle: string;
+  leadServiceName: string;
+};
+
+type BrandApiItem = {
+  id: string;
+  displayName: string;
+  themeLabels?: Partial<Record<CampaignTheme, ThemeLabel>>;
+};
+
+function extractThemeLabels(
+  bundles: BrandPromptTemplate["themeBundles"]
+): Partial<Record<CampaignTheme, ThemeLabel>> {
+  const out: Partial<Record<CampaignTheme, ThemeLabel>> = {};
+  for (const [theme, bundle] of Object.entries(bundles) as [CampaignTheme, ThemeBundle][]) {
+    if (!bundle) continue;
+    out[theme] = {
+      label: bundle.label,
+      angle: bundle.angle,
+      leadServiceName: bundle.leadServiceName,
+    };
+  }
+  return out;
+}
+
+const CODE_BRAND_DEFAULTS: BrandApiItem[] = [
+  {
+    id: omgTemplate.id,
+    displayName: omgTemplate.displayName,
+    themeLabels: extractThemeLabels(omgTemplate.themeBundles),
+  },
+  {
+    id: acmeTemplate.id,
+    displayName: acmeTemplate.displayName,
+    themeLabels: extractThemeLabels(acmeTemplate.themeBundles),
+  },
 ];
 
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const map = new Map<string, string>();
-  for (const b of CODE_BRAND_DEFAULTS) map.set(b.id, b.displayName);
+  const map = new Map<string, BrandApiItem>();
+  for (const b of CODE_BRAND_DEFAULTS) map.set(b.id, b);
 
-  // Query DB directly — bypasses the template cache so newly-added brands always appear
   const rows = await prisma.brandTemplateMaster.findMany({
-    select: { slug: true, displayName: true },
+    select: { slug: true, displayName: true, payload: true },
     orderBy: { slug: "asc" },
   });
-  for (const row of rows) map.set(row.slug, row.displayName);
+  for (const row of rows) {
+    let themeLabels: Partial<Record<CampaignTheme, ThemeLabel>> | undefined;
+    const parsed = brandPromptTemplatePayloadZ.safeParse(row.payload);
+    if (parsed.success) {
+      themeLabels = extractThemeLabels(parsed.data.themeBundles);
+    }
+    map.set(row.slug, {
+      id: row.slug,
+      displayName: row.displayName,
+      themeLabels,
+    });
+  }
 
-  const brands = Array.from(map.entries()).map(([id, displayName]) => ({ id, displayName }));
+  const brands = Array.from(map.values());
   return NextResponse.json({ brands });
 }

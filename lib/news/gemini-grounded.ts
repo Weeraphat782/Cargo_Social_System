@@ -4,6 +4,7 @@ import type { Schema } from "@google/genai";
 import { prisma } from "@/lib/db";
 import { requireEnv } from "@/lib/env";
 import { withGeminiRetry } from "@/lib/gemini-retry";
+import { withAiLog } from "@/lib/ai-logger";
 import { urlDedupKey, verifyUrl } from "./url-verify";
 import type { GoogleNewsResult } from "./google";
 
@@ -106,15 +107,43 @@ Write 2-3 short paragraphs. Focus on specific, recent events from roughly the la
 
   let response;
   try {
-    response = await withGeminiRetry("searchNewsWithGemini:grounding", () =>
-      ai.models.generateContent({
-        model: TEXT_MODEL,
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          maxOutputTokens: 4096,
-        },
-      })
+    response = await withAiLog(
+      "news.grounded",
+      {
+        keyword: query,
+        num,
+        prompt,
+      },
+      () =>
+        withGeminiRetry("searchNewsWithGemini:grounding", () =>
+          ai.models.generateContent({
+            model: TEXT_MODEL,
+            contents: prompt,
+            config: {
+              tools: [{ googleSearch: {} }],
+              maxOutputTokens: 4096,
+            },
+          })
+        ),
+      (res) => {
+        const resObj = res as unknown as Parameters<
+          typeof extractWebRefsFromResponse
+        >[0];
+        const webRefs = extractWebRefsFromResponse(resObj);
+        const firstTitle = webRefs[0]?.title ?? "";
+        const textOut =
+          typeof (res as { text?: string }).text === "string"
+            ? (res as { text?: string }).text
+            : "";
+        return {
+          ok: true,
+          extra: {
+            groundingChunks: webRefs.length,
+            firstTitle,
+          },
+          responseText: textOut,
+        };
+      }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
