@@ -6,6 +6,48 @@ import { withAiLog } from "@/lib/ai-logger";
 import { generateAndUploadImage } from "@/lib/imagegen/gemini";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
 
+const PLATFORM_LABELS: Record<string, string> = {
+  FACEBOOK: "Facebook",
+  INSTAGRAM: "Instagram",
+  LINKEDIN: "LinkedIn",
+  OMG: "Newsroom / blog hero",
+};
+
+const MOOD_EMOTION_CANDIDATES = [
+  "calm",
+  "confident",
+  "premium",
+  "authentic",
+  "inviting",
+  "warm",
+  "bold",
+  "playful",
+  "minimal",
+  "luxurious",
+  "trustworthy",
+  "energetic",
+  "serene",
+  "professional",
+  "innovative",
+  "approachable",
+  "elegant",
+  "grounded",
+  "cinematic",
+  "reflective",
+];
+
+const DEFAULT_MOOD = "calm, confident, premium, authentic, inviting";
+
+function deriveMoodEmotions(
+  ...sources: Array<string | null | undefined>
+): string {
+  const text = sources.filter(Boolean).join(" ").toLowerCase();
+  if (!text) return DEFAULT_MOOD;
+  const matched = MOOD_EMOTION_CANDIDATES.filter((c) => text.includes(c));
+  if (matched.length >= 3) return matched.slice(0, 5).join(", ");
+  return DEFAULT_MOOD;
+}
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -22,67 +64,118 @@ export async function POST(
     select: {
       id: true,
       name: true,
+      description: true,
       keywords: true,
       campaignGoal: true,
       contentPillars: true,
       targetPersona: true,
       brandTemplateId: true,
+      brandVoice: true,
+      platforms: true,
+      theme: true,
     },
   });
   if (!campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const template = await getBrandTemplateOrDefault(campaign.brandTemplateId);
   const ba = template.brandAssets;
+  const themeBundle = template.themeBundles[campaign.theme];
 
   // Derive personality/tone from brand assets
   const brandPersonality = [ba?.visualStyle, ba?.typography].filter(Boolean).join(", ") || "Professional, modern, trustworthy";
   const colorStyle = [ba?.primaryColor, ba?.secondaryColor].filter(Boolean).join(" + ") || "Brand-consistent";
 
   const promptLibraryBlock = ba?.promptLibrary?.length
-    ? `\nBrand mood inspiration — these describe the kind of subject matter and atmosphere typical of this brand. Use for tone, palette, and conceptual direction; do NOT attempt to render any item literally as a named place or identifiable building:\n${ba.promptLibrary.slice(0, 6).map((p) => `- ${p}`).join("\n")}\n`
+    ? `\nBrand mood inspiration (use for tone, palette, and conceptual direction only — do NOT render any item literally as a named place or identifiable building):\n${ba.promptLibrary.slice(0, 3).map((p) => `- ${p}`).join("\n")}\n`
     : "";
 
-  const moodboardPrompt = `Create a professional marketing campaign moodboard for a ${template.industryContext} campaign.
+  const contentPillarsBlock = campaign.contentPillars
+    ? `\nContent pillars to express: ${campaign.contentPillars}`
+    : "";
 
-Objective:
-The moodboard must communicate a clear brand narrative, emotional positioning, and visual direction for a high-performing modern marketing campaign.
-${userPrompt ? `\nCreator's specific direction (treat this as the PRIMARY creative brief — adjust all visual choices to satisfy this):\n"${userPrompt}"\n` : ""}
-Campaign: ${campaign.name}
-Target Audience: ${campaign.targetPersona ?? "Travelers seeking authentic " + template.industryContext + " experiences"}
-Campaign Goal: ${campaign.campaignGoal ?? "Brand awareness and engagement"}
-Core Message: ${campaign.keywords}
-Market Category: ${template.industryContext}
-${campaign.contentPillars ? `Content Pillars: ${campaign.contentPillars}` : ""}
+  const platformsLine =
+    (campaign.platforms ?? [])
+      .map((p) => PLATFORM_LABELS[p] ?? p)
+      .join(", ") || "social media (Facebook, Instagram, LinkedIn)";
 
-BRAND VISUAL STYLE (follow this precisely):
-${ba?.visualStyle ?? brandPersonality}
-${promptLibraryBlock}
-Color palette: ${colorStyle}
+  const moodEmotions = deriveMoodEmotions(
+    ba?.visualStyle,
+    campaign.brandVoice,
+    themeBundle?.tone,
+    themeBundle?.visualStyleNotes
+  );
 
-REFERENCE PHOTOGRAPHS — PRIMARY VISUAL BASIS:
-When reference images are attached to this request, they are the DOMINANT anchor for palette, lighting, lens character, and photographic style. The moodboard collage must read as a natural extension of those photos — do NOT drift into a generic stock look that ignores them.
-Even when the brand text above names specific places, buildings, monasteries, dzongs, mountains, or landmarks, treat those names as MOOD references only. Render generic, plausible scenes that fit the atmosphere — never attempt to recreate a named landmark you do not know with photographic accuracy.
+  const positioning = campaign.brandVoice?.trim()
+    || themeBundle?.tone
+    || "a credible, category-aligned presence";
 
-Moodboard Must Include (weave these naturally into a unified layout):
-1. Hero photography — evocative environments and atmospheric moments that capture the essence of ${template.industryContext}
-2. Brand color palette swatches — built around ${colorStyle}
-3. Lighting mood references — quality and direction of light specific to this brand
-4. Texture and material details — surfaces and elements authentic to this world
-5. Atmospheric wide shots — establishing the landscape and mood
-6. Intimate close-up details — textures, objects, human moments
-7. Emotional storytelling — authentic moments that resonate with the target audience
+  const userDirectionBlock = userPrompt
+    ? `\nCreator's specific direction (PRIMARY brief — adjust all visual choices to satisfy this):\n"${userPrompt}"\n`
+    : "";
 
-Visual Style Requirements:
-- Highly curated, editorial-quality travel documentary aesthetic
-- Premium art direction aligned to ${template.industryContext}
-- Cohesive color grading: ${colorStyle}
-- Every image must feel unmistakably specific to this brand's world — NOT generic stock photography
+  const descriptionBlock = campaign.description?.trim()
+    ? `\nCampaign concept: ${campaign.description.trim()}`
+    : "";
 
-ABSOLUTE REQUIREMENTS — failure to follow these is unacceptable:
-- ZERO text anywhere in the image — no words, no letters, no brand names, no logos, no watermarks, no captions, no labels of any kind
-- All visuals must evoke the world of ${template.industryContext} — never generic or interchangeable with another domain
-- Every visual element must serve the brand's world defined in the visual style above
+  const themeCharacterBlock = themeBundle
+    ? `
+
+[CAMPAIGN CHARACTER]
+- Theme: ${themeBundle.label}
+- Tone: ${themeBundle.tone}
+- Story angle: ${themeBundle.angle}
+- Spotlight: ${themeBundle.leadServiceName}
+- Theme-specific palette and mood notes: ${themeBundle.visualStyleNotes}`
+    : "";
+
+  const themePaletteOverlay = themeBundle?.visualStyleNotes
+    ? ` (theme overlay: ${themeBundle.visualStyleNotes})`
+    : "";
+
+  const moodboardPrompt = `Create a high-impact marketing campaign moodboard for: ${campaign.name}.
+
+[CAMPAIGN OBJECTIVE]
+Drive ${campaign.campaignGoal ?? "brand awareness and engagement"} by positioning the brand as ${positioning}.${descriptionBlock}
+${userDirectionBlock}
+[TARGET AUDIENCE INSIGHT]
+- Profile: ${campaign.targetPersona ?? "Audience aligned with the brand category"}
+- Core motivation: derived from the campaign goal and core message below
+
+[CORE MESSAGE]
+"${campaign.keywords}"${contentPillarsBlock}${themeCharacterBlock}
+
+[VISUAL DIRECTION]
+- Category: ${template.industryContext}
+- Style: ${ba?.visualStyle ?? brandPersonality}
+- Color palette: ${colorStyle}${themePaletteOverlay}
+- Lighting & lens: natural balanced light, editorial clarity, cohesive across the board
+- Composition: layered moodboard collage with varied scales (wide, mid, close-up)
+- Texture & material: authentic to the brand's world${promptLibraryBlock}
+
+[CONTENT ELEMENTS]
+- Lifestyle / use-case scenarios: aspirational but plausible, never literal landmarks
+- Product or service in real context: prefer human presence over empty stock
+- Emotional storytelling moments — intimate human details and atmospheric wide shots
+- Branding: subtle, integrated, non-intrusive (no logos, no on-image text)
+
+[MARKETING TOUCHPOINTS]
+Adapt visuals for: ${platformsLine}.
+
+[MOOD & EMOTION]
+${moodEmotions}.
+
+[CREATIVE REFERENCES]
+- Attached reference images are the PRIMARY visual anchor (palette, lighting, lens character, photographic style). The moodboard must read as a natural extension of those photos — do NOT drift into a generic stock look that ignores them.
+- Treat any named places, buildings, monuments, or landmarks in the brand text as MOOD references only. Render generic, plausible scenes that fit the atmosphere — never attempt photographic recreation of a specific real-world location.
+- Avoid: text or typography, brand names, logos, watermarks, generic stock photography, literal landmark recreation.
+
+[OUTPUT REQUIREMENT]
+Generate a cohesive, visually consistent moodboard collage with strong storytelling, aligned with the brand positioning above. Premium, editorial quality, optimised for digital marketing performance.
+
+ABSOLUTE REQUIREMENTS — failure to follow is unacceptable:
+- ZERO text anywhere in the image — no words, letters, numbers, brand names, logos, watermarks, captions, or labels of any kind
 - Consistent visual language and color grading throughout the entire board
+- Every element serves the brand positioning and visual direction above
 Final instruction: absolutely no text, no typography, no letters, no numbers, no words anywhere in any part of the image.`;
 
   const brandRefsCount = (ba?.referenceImages ?? []).filter((u) => u?.trim()).length;

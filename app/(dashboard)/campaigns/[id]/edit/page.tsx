@@ -108,6 +108,7 @@ export default function EditCampaignPage() {
       schedule,
       platforms,
       postsPerRun,
+      imagesPerPost,
       totalPostsCap,
       autoApprove,
     } = form;
@@ -147,6 +148,7 @@ export default function EditCampaignPage() {
           scheduledDatetimes: schedule.scheduledDatetimes,
           platforms: platforms.length ? platforms : undefined,
           postsPerRun,
+          imagesPerPost,
           totalPostsCap: totalPostsCap ? parseInt(totalPostsCap, 10) : null,
           autoApprove,
           publishHourOfDay: form.publishHourOfDay,
