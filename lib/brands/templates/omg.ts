@@ -9,14 +9,23 @@ const PROMO_GUIDANCE = `OMG self-promotion rules for Facebook / Instagram / Link
 export const omgTemplate: BrandPromptTemplate = {
   id: "omg",
   displayName: "OMG Experience",
+  focusKeywords: [
+    "eu gmp annex 7 herbal medicinal products cannabis",
+    "gmp cannabis logistics",
+    "eu gmp certification cannabis",
+    "gacp cannabis",
+    "eu gdp cold chain cannabis",
+    "medical cannabis import eu",
+    "germany medical cannabis logistics",
+  ],
   strategistTagline:
-    "You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, time-critical cargo, and AI-powered logistics.",
+    "You are a social media strategist for OMG Experience — specialized air freight, pharmaceutical cold chain, EU GMP/GACP cannabis logistics, time-critical cargo, and AI-powered logistics.",
   orgShort: "OMG",
   orgDisplayName: "OMG",
   sourceArticleSiteLabel: "for OMG newsroom only",
   servicesCatalogHeading: "OMG services catalog (for Facebook / Instagram / LinkedIn promo):",
   newsroomRequirementsHeading: "OMG newsroom requirements:",
-  industryContext: "logistics / supply chain",
+  industryContext: "EU GMP/GACP cannabis logistics, pharmaceutical cold chain, and regulated air freight compliance",
   services: [
     {
       name: "Specialized Air Freight",
@@ -53,8 +62,14 @@ export const omgTemplate: BrandPromptTemplate = {
   },
   selfPromoEditorialNoExternalSource: `OMG newsroom / site article (self-promo editorial, NOT a syndicated news piece):
 - Write an **original editorial** (400-800 words, ## markdown headings) explaining why this capability matters, how OMG approaches it, and a soft CTA. No need to reference a real breaking-news URL.
+- Open the article with a 1-2 sentence direct answer to the core question before any heading (optimised for AI/LLM extraction and featured snippets).
+- Heading hierarchy: the page title is the H1; inside bodyMd use ## (H2) for main sections and ### (H3) for subsections only — never a single # H1, never skip levels.
+- Use bullet/numbered lists for steps or criteria, and include at least one markdown comparison table when comparing options, tools, or approaches.
+- Write a meta description (150-160 chars, PRIMARY SEO KEYWORD first) in the metaDescription field.
+- Include at least one markdown link to the money page: [OMG Experience](https://cargo.omgexp.com/site)
+- Where relevant, cross-reference sibling topics in the cannabis/GMP/EU compliance cluster (GACP, EU GDP cold chain, EU GMP Annex 7, medical cannabis import) to build topical authority.
 - Do NOT add a "Source: [external URL]" line for a news site — the article is OMG-originated.
-- slug: kebab-case, unique for this piece.`,
+- slug: semantic kebab-case with the PRIMARY SEO KEYWORD (3-6 words), no random suffix.`,
   selfPromoGeneralValueProposition:
     "General OMG value proposition; pick the most relevant OMG services below.",
   suggestCampaign: {

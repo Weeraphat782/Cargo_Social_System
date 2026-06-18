@@ -8,6 +8,7 @@ async function fetchCampaignDetailImpl(id: string) {
     prisma.campaign.findUnique({
       where: { id },
       include: {
+        strategy: { select: { id: true, name: true } },
         _count: { select: { posts: true } },
         runs: { orderBy: { startedAt: "desc" }, take: 30 },
         posts: {
@@ -74,6 +75,7 @@ async function fetchCampaignDetailImpl(id: string) {
   // Serialize dates for Server-to-Client transfer
   return {
     ...c,
+    strategy: c.strategy ? { id: c.strategy.id, name: c.strategy.name } : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
     startAt: c.startAt.toISOString(),

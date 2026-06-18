@@ -5,6 +5,11 @@ import { prisma } from "@/lib/db";
 import { logAiCall } from "@/lib/ai-logger";
 import { generateAndUploadImage, ASPECT_PRESETS } from "@/lib/imagegen/gemini";
 import { resolveCampaignImageRefs } from "@/lib/brands/campaign-image-refs";
+import { hasUsableMoodboard } from "@/lib/campaigns/require-moodboard";
+import {
+  buildCreatorDirectionBlock,
+  rewriteImageUserPrompt,
+} from "@/lib/imagegen/rewrite-user-prompt";
 
 const aspectFor: Record<Platform, keyof typeof ASPECT_PRESETS> = {
   FACEBOOK: "FACEBOOK",
@@ -24,6 +29,8 @@ export async function POST(
   const body = (await req.json()) as {
     variantId: string;
     prompt?: string;
+    /** Negative-to-positive creator direction (optional), appended after rewrite */
+    userPrompt?: string;
     referenceCategory?: string | null;
   };
   if (!body.variantId) {
@@ -47,6 +54,7 @@ export async function POST(
             keywords: true,
             moodboardImages: true,
             brandTemplateId: true,
+            theme: true,
           },
         },
       },
@@ -54,7 +62,17 @@ export async function POST(
   ]);
   if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
 
-  const prompt =
+  if (
+    post?.campaign &&
+    !hasUsableMoodboard(post.campaign.moodboardImages)
+  ) {
+    return NextResponse.json(
+      { error: "Campaign has no moodboard. Generate one first." },
+      { status: 409 }
+    );
+  }
+
+  let prompt =
     body.prompt ?? variant.media[0]?.prompt ?? "Editorial photo hero image, no text; match the post story.";
 
   const newsContext = post?.sourceNews
@@ -65,6 +83,27 @@ export async function POST(
           [post?.campaign?.description, post?.campaign?.keywords].filter(Boolean).join(" | ") ||
           undefined,
       };
+
+  const userPrompt =
+    typeof body.userPrompt === "string" ? body.userPrompt.trim() : "";
+  let rewriteApplied = false;
+  if (userPrompt && post?.campaign) {
+    const rewrite = await rewriteImageUserPrompt({
+      userPrompt,
+      kind: "postImage",
+      postImage: {
+        postId,
+        campaignName: post.campaign.name,
+        newsTitle: newsContext.title,
+        newsSnippet: newsContext.snippet,
+        theme: post.campaign.theme,
+      },
+    });
+    if (rewrite) {
+      prompt = `${prompt}\n\n${buildCreatorDirectionBlock(rewrite)}`;
+      rewriteApplied = true;
+    }
+  }
 
   let moodboardReferenceUrl: string | null = null;
   let brandReferenceUrls: string[] | null = null;
@@ -85,6 +124,7 @@ export async function POST(
       aspect: aspectFor[variant.platform],
       brandRefs: brandReferenceUrls?.length ?? 0,
       moodboard: Boolean(moodboardReferenceUrl),
+      hasImageUserPrompt: rewriteApplied,
     });
     const gen = await generateAndUploadImage({
       prompt,
@@ -94,6 +134,8 @@ export async function POST(
       newsContext,
       moodboardReferenceUrl,
       brandReferenceUrls,
+      subjectAnchor: moodboardReferenceUrl ? "moodboard" : "auto",
+      hasUserOverride: rewriteApplied,
     });
 
     const media = variant.media[0];
@@ -116,7 +158,6 @@ export async function POST(
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     let msg = raw;
-    // Translate common Gemini quota errors into something actionable.
     if (/limit:\s*0/i.test(raw) || /RESOURCE_EXHAUSTED/i.test(raw)) {
       msg =
         "Gemini image generation quota is 0 on your free tier. Enable billing at https://aistudio.google.com/app/apikey to generate images.";

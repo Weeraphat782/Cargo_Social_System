@@ -5,6 +5,7 @@ export type OmgNewsroomPayload = {
   title: string;
   slug: string;
   summary: string;
+  metaDescription?: string;
   bodyMd: string;
   heroImageUrl: string;
   category?: string;
@@ -31,6 +32,7 @@ export async function publishOmgNewsroom(input: PublishInput): Promise<PublishRe
     title,
     slug,
     summary: input.caption.slice(0, 500),
+    metaDescription: input.metaDescription ?? input.caption.slice(0, 160),
     bodyMd: input.bodyMd ?? `## ${title}\n\n${input.caption}`,
     heroImageUrl: input.imageUrls[0] ?? "",
     category: "News",

@@ -63,6 +63,20 @@ enum CampaignContentMode {
   SELF_PROMO
 }
 
+enum StrategyStatus {
+  UPLOADED
+  ANALYZING
+  READY_REVIEW
+  COMPLETED
+  FAILED
+}
+
+enum StrategyDraftStatus {
+  PENDING
+  REJECTED
+  CREATED
+}
+
 model Topic {
   id                String   @id @default(cuid())
   name              String
@@ -166,6 +180,9 @@ model Campaign {
   /// Up to 4 R2 image URLs generated for visual direction reference
   moodboardImages      Json?
   moodboardGeneratedAt DateTime?
+  strategyId    String?
+  strategy      MarketingStrategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+  createdFromDraft StrategyCampaignDraft?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   posts         Post[]
@@ -175,6 +192,7 @@ model Campaign {
   @@index([status, nextRunAt])
   @@index([updatedAt(sort: Desc)])
   @@index([brandTemplateId])
+  @@index([strategyId])
 }
 
 model CampaignRun {
@@ -301,4 +319,42 @@ model PublishLog {
   errorMessage String?  @db.Text
 
   @@index([postId, attemptAt(sort: Desc)])
+}
+
+model MarketingStrategy {
+  id              String         @id @default(cuid())
+  name            String
+  brandTemplateId String         @default("omg")
+  status          StrategyStatus @default(UPLOADED)
+  sourceFileUrl   String
+  sourceFileName  String
+  sourceMimeType  String         @default("application/pdf")
+  sourceBytes     Int?
+  summary         String?        @db.Text
+  rawExtraction   Json?
+  analyzeError    String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  drafts          StrategyCampaignDraft[]
+  campaigns       Campaign[]
+
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([brandTemplateId])
+}
+
+model StrategyCampaignDraft {
+  id                String              @id @default(cuid())
+  strategyId        String
+  strategy          MarketingStrategy   @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  status            StrategyDraftStatus @default(PENDING)
+  orderIndex        Int                 @default(0)
+  payload           Json
+  rationale         String?             @db.Text
+  sourceQuote       String?             @db.Text
+  createdCampaignId String?             @unique
+  createdCampaign   Campaign?           @relation(fields: [createdCampaignId], references: [id], onDelete: SetNull)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([strategyId, orderIndex])
 }

@@ -44,6 +44,8 @@ export async function executePublishPost(postId: string): Promise<void> {
         title: v.title ?? undefined,
         bodyMd: v.bodyMd ?? undefined,
         slug: v.slug ?? undefined,
+        metaDescription: (v.meta as { metaDescription?: string } | null)
+          ?.metaDescription,
       });
 
       await prisma.postVariant.update({

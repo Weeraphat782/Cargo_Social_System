@@ -30,6 +30,9 @@ export default function QueueClient({
 
   const [refCategories, setRefCategories] = useState<RefCategory[]>([]);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [creatorDirectionDrafts, setCreatorDirectionDrafts] = useState<
+    Record<string, string>
+  >({});
   const [refCategoryByVariant, setRefCategoryByVariant] = useState<Record<string, string>>({});
   const [variationCandidates, setVariationCandidates] = useState<
     Record<string, Array<{ imageUrl: string; prompt: string }>>
@@ -293,6 +296,8 @@ export default function QueueClient({
                     setActivePlatformTab={setActivePlatformTab}
                     promptDrafts={promptDrafts}
                     setPromptDrafts={setPromptDrafts}
+                    creatorDirectionDrafts={creatorDirectionDrafts}
+                    setCreatorDirectionDrafts={setCreatorDirectionDrafts}
                     refCategories={refCategories}
                     refCategoryByVariant={refCategoryByVariant}
                     setRefCategoryByVariant={setRefCategoryByVariant}
@@ -336,6 +341,8 @@ export default function QueueClient({
                     setActivePlatformTab={setActivePlatformTab}
                     promptDrafts={promptDrafts}
                     setPromptDrafts={setPromptDrafts}
+                    creatorDirectionDrafts={creatorDirectionDrafts}
+                    setCreatorDirectionDrafts={setCreatorDirectionDrafts}
                     refCategories={refCategories}
                     refCategoryByVariant={refCategoryByVariant}
                     setRefCategoryByVariant={setRefCategoryByVariant}

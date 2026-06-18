@@ -54,6 +54,8 @@ export type BrandAssets = {
 export type BrandPromptTemplate = {
   id: string;
   displayName: string;
+  /** SEO keyword cluster this brand targets for newsroom topical authority */
+  focusKeywords?: string[];
   /** First sentence of draft prompts ("You are a social media strategist for …") */
   strategistTagline: string;
   /** Short name for in-copy rules ("OMG") */

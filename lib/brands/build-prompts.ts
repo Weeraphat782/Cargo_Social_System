@@ -11,11 +11,45 @@ function servicesCatalogLines(t: BrandPromptTemplate): string {
   return t.services.map((s) => `- ${s.name} [${s.tags.join(", ")}]: ${s.pitch}`).join("\n");
 }
 
+/** Injects the campaign/topic keyword cluster into news-driven draft prompts. */
+function buildPrimarySeoKeywordBlock(targetKeywords?: string | null): string {
+  const kw = targetKeywords?.trim();
+  if (!kw) return "";
+  return `
+PRIMARY SEO KEYWORD (MANDATORY — frame the entire article around this phrase cluster):
+"${kw}"
+
+SEO framing rules (use the source article as the news angle, but optimise on-page SEO for this keyword):
+- title: front-load this keyword or its core terms within the first ~40 characters
+- slug: semantic kebab-case containing the primary terms from this keyword (3-6 words, no random suffix)
+- metaDescription: the first sentence MUST include this keyword
+- bodyMd: at least one ## H2 heading MUST include this keyword or its core terms
+- Do NOT invent facts beyond the source article; reframe the story's relevance through this keyword lens
+`;
+}
+
+/** Topical-authority internal linking rules for newsroom articles. */
+function buildInternalLinkingBlock(t: BrandPromptTemplate): string {
+  const moneyPage = t.mandatoryCtaUrl;
+  const clusterHint =
+    t.focusKeywords && t.focusKeywords.length > 0
+      ? `When relevant, naturally reference one sibling topic from this cluster (use descriptive anchor text): ${t.focusKeywords.slice(0, 6).join("; ")}`
+      : "Where relevant, cross-reference related service capabilities on the same site.";
+  return `
+TOPICAL AUTHORITY / INTERNAL LINKING (newsroom article):
+- Include at least one markdown link to the money page: [${t.orgDisplayName}](${moneyPage})
+- ${clusterHint}
+- Place internal links in bodyMd (not only in social captions) to strengthen topical authority around the keyword cluster.
+`;
+}
+
 export function buildTopicNewsDraftPrompt(
   t: BrandPromptTemplate,
   input: {
     topicName: string;
     brandVoice?: string | null;
+    /** English search query / keyword cluster — injected as PRIMARY SEO KEYWORD */
+    targetKeywords?: string | null;
     newsTitle: string;
     newsUrl: string;
     newsSnippet: string;
@@ -25,11 +59,13 @@ export function buildTopicNewsDraftPrompt(
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
+  const seoBlock = buildPrimarySeoKeywordBlock(input.targetKeywords);
+  const linkingBlock = buildInternalLinkingBlock(t);
   return `${t.strategistTagline}
 
 Topic: ${input.topicName}
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-
+${seoBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -43,12 +79,15 @@ ${t.promoGuidance}
 
 ${t.newsroomRequirementsHeading}
 - Write an original news-style article (500-900 words, ## headings, markdown).
+- Open the article with a 1-2 sentence direct answer to the core question before any heading (optimised for AI/LLM extraction and featured snippets).
+- Heading hierarchy: the page title is the H1; inside bodyMd use ## (H2) for main sections and ### (H3) for subsections only — never a single # H1, never skip levels.
+- Use bullet/numbered lists for steps or criteria, and include at least one markdown comparison table when comparing options, tools, or approaches.
+- Write a meta description (150-160 chars, PRIMARY SEO KEYWORD first) in the metaDescription field.
 - Lead with what happened and why it matters for ${t.industryContext}.
 - Attribute facts clearly; do not fabricate figures.
 - Set JSON fields sourceTitle and sourceUrl to the source article title and URL above verbatim.
 - End bodyMd with a final line exactly: > Source: [sourceTitle](sourceUrl) using the same title and URL as above.
-- slug must be unique kebab-case.
-
+${linkingBlock}
 Social requirements (promo, NOT news rewrite):
 - Facebook: ~100-180 words, soft CTA, follow Promo guidance.
 - Instagram: caption up to 2200 characters; strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #
@@ -102,12 +141,16 @@ export function buildCampaignNewsDraftPrompt(
     platformStrategies?: Record<string, string> | null;
     /** Human-written or AI-generated editorial brief for this specific post slot. */
     editorialBrief?: string | null;
+    /** English search query / keyword cluster — injected as PRIMARY SEO KEYWORD */
+    targetKeywords?: string | null;
     /** True when brand master has referenceImages — multimodal image gen anchors on those photos */
     brandHasReferenceImages?: boolean;
   },
   imagePromptJsonRules: string
 ): string {
   const catalog = servicesCatalogLines(t);
+  const seoBlock = buildPrimarySeoKeywordBlock(input.targetKeywords);
+  const linkingBlock = buildInternalLinkingBlock(t);
   const pillarLine = input.activePillar
     ? `Content pillar for THIS post: ${input.activePillar} — write all captions through this lens. Other pillars exist in the campaign but are not for this post.`
     : input.contentPillars
@@ -143,7 +186,7 @@ Theme angle: ${input.theme.angle}
 Theme tone: ${input.theme.tone}
 Lead the promo narrative around this service (when matching news context): **${input.theme.leadServiceName}** — still use ${t.orgShort} services catalog to stay factual.
 Brand voice: ${input.brandVoice ?? "Professional, compliance-aware, trustworthy, concise."}
-${strategyBlock ? `\n${strategyBlock}\n` : ""}${briefBlock}${platformBlock}${langBlock}${diversityBlock}
+${strategyBlock ? `\n${strategyBlock}\n` : ""}${briefBlock}${platformBlock}${langBlock}${diversityBlock}${seoBlock}
 Source article (${t.sourceArticleSiteLabel} — do NOT paraphrase on social):
 Title: ${input.newsTitle}
 URL: ${input.newsUrl}
@@ -159,12 +202,15 @@ Theme palette (for final image only — will be added at render time, NOT inside
 
 ${t.newsroomRequirementsHeading}
 - Write an original news-style article (500-900 words, ## headings, markdown).
+- Open the article with a 1-2 sentence direct answer to the core question before any heading (optimised for AI/LLM extraction and featured snippets).
+- Heading hierarchy: the page title is the H1; inside bodyMd use ## (H2) for main sections and ### (H3) for subsections only — never a single # H1, never skip levels.
+- Use bullet/numbered lists for steps or criteria, and include at least one markdown comparison table when comparing options, tools, or approaches.
+- Write a meta description (150-160 chars, PRIMARY SEO KEYWORD first) in the metaDescription field.
 - Lead with what happened and why it matters for ${t.industryContext}.
 - Attribute facts clearly; do not fabricate figures.
 - Set JSON fields sourceTitle and sourceUrl to the source article title and URL above verbatim.
 - End bodyMd with a final line exactly: > Source: [sourceTitle](sourceUrl) using the same title and URL as above.
-- slug must be unique kebab-case.
-
+${linkingBlock}
 Social requirements (promo, NOT news rewrite):
 - Facebook: ~100-180 words, soft CTA, follow Promo guidance; align with theme tone.
 - Instagram: caption up to 2200 characters, strong hook; hashtags: 15-25 relevant tags, space-separated, each starting with #

@@ -17,6 +17,7 @@ import { parsePublishTimesJson } from "@/lib/campaigns/publish-times";
 import { requireEnv } from "@/lib/env";
 import { searchNews, searchNewsWithGemini, type GoogleNewsResult } from "@/lib/news";
 import { generateAndUploadImage, type AspectKey } from "@/lib/imagegen/gemini";
+import { hasUsableMoodboard } from "@/lib/campaigns/require-moodboard";
 import { logAiCall, withAiLog } from "@/lib/ai-logger";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import {
@@ -43,6 +44,7 @@ export type DraftJson = {
     title: string;
     slug: string;
     summary: string;
+    metaDescription: string;
     bodyMd: string;
     sourceTitle: string;
     sourceUrl: string;
@@ -59,9 +61,9 @@ export type ImagePromptBlock = {
 };
 
 const IMAGE_PROMPT_JSON_RULES = `The imagePrompt field MUST be a JSON object with:
-- subject: one sentence describing the CONCEPTUAL SCENE — focus on the activity, industry context, and emotion. Do NOT name specific real-world companies, locations, buildings, roads, landmarks, or geographic places (e.g. do NOT write "Taksan warehouse", "Bangkok port", "OMG hub" — instead write "a freight sorting facility", "a busy container port", "logistics workers processing parcels"). This prevents AI hallucination of real places the model has never seen.
-- keyElements: 3-5 short conceptual strings describing activities, roles, objects, or emotions — NOT place names or company names. No brand names as readable text in the final image.
-- mood: optional 1-4 words. Theme palette and lighting are added later; do not pack environment clichés into subject. No text, watermarks, or logos in the final image.`;
+- subject: one sentence describing the CONCEPTUAL SCENE — favor environment, machinery, materials, light, and atmosphere. Default to PEOPLE-FREE compositions (empty operational spaces, equipment close-ups, product details, architectural texture, weather and light). Do NOT name specific real-world companies, locations, buildings, roads, landmarks, or geographic places (e.g. do NOT write "Taksan warehouse", "Bangkok port", "OMG hub" — instead write "a freight sorting facility lit by dawn light", "a busy container port at golden hour", "an empty cold-chain corridor with stacked pallets"). Only include human figures in the subject when the source article EXPLICITLY centers on a specific human action, decision, or quote that cannot be told without showing a person; if the article is generic editorial / industry news / market context, keep the subject people-free.
+- keyElements: 3-5 short conceptual strings describing objects, materials, environmental details, or atmosphere — NOT place names, company names, or generic "team/workers/staff" references unless the source story is specifically about a human action.
+- mood: optional 1-4 words. Theme palette and lighting are added later; do not pack environment clichés or human figures into subject. No text, watermarks, or logos in the final image.`;
 
 const draftResponseSchema: Schema = {
   type: Type.OBJECT,
@@ -103,13 +105,26 @@ const draftResponseSchema: Schema = {
     omg: {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING },
-        slug: { type: Type.STRING, description: "kebab-case unique slug" },
-        summary: { type: Type.STRING, description: "1-2 sentence summary" },
+        title: {
+          type: Type.STRING,
+          description:
+            "SEO title, front-load the PRIMARY SEO KEYWORD specified in the prompt (or its core terms), <= 60 characters, no brand stuffing, compelling and specific.",
+        },
+        slug: {
+          type: Type.STRING,
+          description:
+            "Semantic kebab-case slug containing the PRIMARY SEO KEYWORD from the prompt, 3-6 words, lowercase, hyphen-separated, no dates / stopwords / random suffix.",
+        },
+        summary: { type: Type.STRING, description: "1-2 sentence on-page excerpt / lead-in" },
+        metaDescription: {
+          type: Type.STRING,
+          description:
+            'Plain-text meta description for the HTML <meta name="description"> tag, 150-160 characters, first sentence MUST include the PRIMARY SEO KEYWORD from the prompt, one clear value proposition, no markdown, no quotes.',
+        },
         bodyMd: {
           type: Type.STRING,
           description:
-            "Full markdown article 500-900 words with H2 headings; end with blockquote Source line",
+            "Full markdown article 500-900 words. START with a 1-2 sentence direct-answer snippet that directly answers the article's core question (for AI extraction). Use ## for H2 and ### for H3 ONLY — NEVER use a single # / H1 (the page title is the only H1). At least one ## H2 MUST include the PRIMARY SEO KEYWORD or its core terms. Do not skip heading levels. Use bullet or numbered lists for steps/criteria and at least one comparison table when content compares options. End with the blockquote Source line.",
         },
         sourceTitle: {
           type: Type.STRING,
@@ -120,7 +135,15 @@ const draftResponseSchema: Schema = {
           description: "Original news article URL (verbatim from source)",
         },
       },
-      required: ["title", "slug", "summary", "bodyMd", "sourceTitle", "sourceUrl"],
+      required: [
+        "title",
+        "slug",
+        "summary",
+        "metaDescription",
+        "bodyMd",
+        "sourceTitle",
+        "sourceUrl",
+      ],
     },
     imagePrompt: {
       type: Type.OBJECT,
@@ -196,7 +219,7 @@ export function composeImageBrief(
   const lines: string[] = [];
   if (options.brandReferenceAnchored) {
     lines.push(
-      "Visual anchor: replicate look-and-feel of the provided brand reference images (PRIMARY). Palette / lighting notes below are SECONDARY if they conflict with those photos."
+      "Visual reference layering: brand reference photographs provide PALETTE / LIGHTING / LENS guidance only. The campaign moodboard governs subject choice and human-presence default. Do NOT copy subjects (people, objects, places) from the brand reference photos."
     );
   }
   lines.push(`Scene: ${subject}.`);
@@ -250,6 +273,7 @@ export async function draftWithGemini(
   input: {
     topicName: string;
     brandVoice?: string | null;
+    targetKeywords?: string | null;
     newsTitle: string;
     newsUrl: string;
     newsSnippet: string;
@@ -322,6 +346,7 @@ export async function draftWithGeminiForCampaign(
     activePillar?: string | null;
     platformStrategies?: Record<string, string> | null;
     editorialBrief?: string | null;
+    targetKeywords?: string | null;
   },
   template: BrandPromptTemplate
 ): Promise<DraftJson> {
@@ -685,6 +710,7 @@ export async function runAgentForCampaign(
           activePillar,
           platformStrategies: (campaign.platformStrategies ?? null) as Record<string, string> | null,
           editorialBrief: plan?.brief ?? null,
+          targetKeywords: effectiveKeywords,
         },
         template
       );
@@ -708,14 +734,14 @@ export async function runAgentForCampaign(
           ? "LINKEDIN"
           : "FACEBOOK";
 
-    // Pass campaign moodboard as visual reference if it exists
+    // Pass campaign moodboard as visual reference when present and usable
     const moodboardImages = Array.isArray(campaign.moodboardImages)
       ? (campaign.moodboardImages as string[])
       : [];
-    const moodboardReferenceUrl =
-      moodboardImages[0] && !moodboardImages[0].startsWith("data:")
-        ? moodboardImages[0]
-        : null;
+    const usableMoodboard = hasUsableMoodboard(campaign.moodboardImages);
+    const moodboardReferenceUrl = usableMoodboard
+      ? moodboardImages[0]!.trim()
+      : null;
 
     const brandRefAnchored = Boolean(
       template.brandAssets?.referenceImages?.some((u) => u?.trim())
@@ -732,6 +758,9 @@ export async function runAgentForCampaign(
       "Alternative angle or fresh perspective on the same subject.",
     ];
     const generatedImages: { url: string; prompt: string }[] = [];
+    const MOODBOARD_SKIP_NOTE =
+      "\n\n[System: Images skipped — campaign has no moodboard. Generate a moodboard on the campaign detail page first.]";
+
     logAiCall("agent.post.imageBatch", {
       phase: "start",
       campaignId: campaign.id,
@@ -740,38 +769,63 @@ export async function runAgentForCampaign(
       aspect,
       theme: theme.id,
       brandRefs: (template.brandAssets?.referenceImages ?? []).filter((u) => u?.trim()).length,
-      moodboard: Boolean(moodboardReferenceUrl),
+      moodboard: usableMoodboard,
       briefLen: imageBrief.length,
     });
-    for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
-      const variantBrief =
-        imageCount > 1
-          ? `${imageBrief}\n\nComposition (image ${imgIdx + 1} of ${imageCount}): ${COMPOSITION_ANGLES[imgIdx] ?? COMPOSITION_ANGLES[0]}`
-          : imageBrief;
-      try {
-        const gen = await generateAndUploadImage({
-          prompt: variantBrief,
-          aspect,
-          storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}-${imgIdx}`,
-          referenceCategory: theme.referenceCategory,
-          newsContext: newsForImage,
-          moodboardReferenceUrl,
-          brandReferenceUrls: (template.brandAssets?.referenceImages ?? null),
+
+    if (!usableMoodboard) {
+      logAiCall("agent.post.imageBatch", {
+        phase: "error",
+        campaignId: campaign.id,
+        postIndex: i,
+        reason: "missing_moodboard",
+      });
+      for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+        generatedImages.push({
+          url: PLACEHOLDER_PNG,
+          prompt: `${imageBrief}${MOODBOARD_SKIP_NOTE}`,
         });
-        generatedImages.push({ url: gen.imageUrl, prompt: gen.prompt });
-      } catch (err) {
-        console.error(
-          "[agent] campaign image generation failed:",
-          err instanceof Error ? err.message : String(err)
-        );
-        if (imgIdx === 0) generatedImages.push({ url: PLACEHOLDER_PNG, prompt: imageBrief });
+      }
+    } else {
+      for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
+        const variantBrief =
+          imageCount > 1
+            ? `${imageBrief}\n\nComposition (image ${imgIdx + 1} of ${imageCount}): ${COMPOSITION_ANGLES[imgIdx] ?? COMPOSITION_ANGLES[0]}`
+            : imageBrief;
+        try {
+          const gen = await generateAndUploadImage({
+            prompt: variantBrief,
+            aspect,
+            storageKeyPrefix: `campaign/${campaignId}/shared/${Date.now()}-${i}-${imgIdx}`,
+            referenceCategory: theme.referenceCategory,
+            newsContext: newsForImage,
+            moodboardReferenceUrl,
+            brandReferenceUrls: (template.brandAssets?.referenceImages ?? null),
+            subjectAnchor: "moodboard",
+          });
+          generatedImages.push({ url: gen.imageUrl, prompt: gen.prompt });
+        } catch (err) {
+          console.error(
+            "[agent] campaign image generation failed:",
+            err instanceof Error ? err.message : String(err)
+          );
+          if (imgIdx === 0)
+            generatedImages.push({ url: PLACEHOLDER_PNG, prompt: imageBrief });
+        }
       }
     }
     if (generatedImages.length === 0) generatedImages.push({ url: PLACEHOLDER_PNG, prompt: imageBrief });
 
     const variantData: Record<
       Platform,
-      { caption: string; hashtags?: string; title?: string; slug?: string; bodyMd?: string }
+      {
+        caption: string;
+        hashtags?: string;
+        title?: string;
+        slug?: string;
+        bodyMd?: string;
+        metaDescription?: string;
+      }
     > = {
       FACEBOOK: { caption: draft.facebook.caption },
       INSTAGRAM: {
@@ -784,6 +838,7 @@ export async function runAgentForCampaign(
         title: draft.omg.title,
         slug: draft.omg.slug,
         bodyMd: draft.omg.bodyMd,
+        metaDescription: draft.omg.metaDescription,
       },
     };
 
@@ -809,6 +864,9 @@ export async function runAgentForCampaign(
               title: v.title ?? null,
               slug: v.slug ?? null,
               bodyMd: v.bodyMd ?? null,
+              meta: v.metaDescription
+                ? { metaDescription: v.metaDescription }
+                : undefined,
             },
           });
           for (const img of generatedImages) {
@@ -889,6 +947,7 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
     {
       topicName: topic.name,
       brandVoice: topic.brandVoice,
+      targetKeywords: topic.keywords,
       newsTitle: top.title,
       newsUrl: top.link,
       newsSnippet: top.snippet,
@@ -925,7 +984,14 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
 
   const variantData: Record<
     Platform,
-    { caption: string; hashtags?: string; title?: string; slug?: string; bodyMd?: string }
+    {
+      caption: string;
+      hashtags?: string;
+      title?: string;
+      slug?: string;
+      bodyMd?: string;
+      metaDescription?: string;
+    }
   > = {
     FACEBOOK: { caption: draft.facebook.caption },
     INSTAGRAM: {
@@ -938,6 +1004,7 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
       title: draft.omg.title,
       slug: draft.omg.slug,
       bodyMd: draft.omg.bodyMd,
+      metaDescription: draft.omg.metaDescription,
     },
   };
 
@@ -962,6 +1029,9 @@ export async function runAgentForTopic(topicId: string): Promise<{ postId: strin
             title: v.title ?? null,
             slug: v.slug ?? null,
             bodyMd: v.bodyMd ?? null,
+            meta: v.metaDescription
+              ? { metaDescription: v.metaDescription }
+              : undefined,
           },
         });
         await tx.media.create({

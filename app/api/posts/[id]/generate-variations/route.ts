@@ -5,6 +5,11 @@ import { prisma } from "@/lib/db";
 import { logAiCall } from "@/lib/ai-logger";
 import { generateAndUploadImage, ASPECT_PRESETS } from "@/lib/imagegen/gemini";
 import { resolveCampaignImageRefs } from "@/lib/brands/campaign-image-refs";
+import { hasUsableMoodboard } from "@/lib/campaigns/require-moodboard";
+import {
+  buildCreatorDirectionBlock,
+  rewriteImageUserPrompt,
+} from "@/lib/imagegen/rewrite-user-prompt";
 
 const aspectFor: Record<Platform, keyof typeof ASPECT_PRESETS> = {
   FACEBOOK: "FACEBOOK",
@@ -24,6 +29,7 @@ export async function POST(
   const body = (await req.json()) as {
     variantId: string;
     prompt?: string;
+    userPrompt?: string;
     referenceCategory?: string | null;
     count?: number;
   };
@@ -51,6 +57,7 @@ export async function POST(
             keywords: true,
             moodboardImages: true,
             brandTemplateId: true,
+            theme: true,
           },
         },
       },
@@ -58,7 +65,17 @@ export async function POST(
   ]);
   if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
 
-  const prompt =
+  if (
+    post?.campaign &&
+    !hasUsableMoodboard(post.campaign.moodboardImages)
+  ) {
+    return NextResponse.json(
+      { error: "Campaign has no moodboard. Generate one first." },
+      { status: 409 }
+    );
+  }
+
+  let prompt =
     body.prompt ?? variant.media[0]?.prompt ?? "Editorial photo hero image, no text; match the post story.";
 
   const newsContext = post?.sourceNews
@@ -69,6 +86,27 @@ export async function POST(
           [post?.campaign?.description, post?.campaign?.keywords].filter(Boolean).join(" | ") ||
           undefined,
       };
+
+  const userPrompt =
+    typeof body.userPrompt === "string" ? body.userPrompt.trim() : "";
+  let rewriteApplied = false;
+  if (userPrompt && post?.campaign) {
+    const rewrite = await rewriteImageUserPrompt({
+      userPrompt,
+      kind: "postImage",
+      postImage: {
+        postId,
+        campaignName: post.campaign.name,
+        newsTitle: newsContext.title,
+        newsSnippet: newsContext.snippet,
+        theme: post.campaign.theme,
+      },
+    });
+    if (rewrite) {
+      prompt = `${prompt}\n\n${buildCreatorDirectionBlock(rewrite)}`;
+      rewriteApplied = true;
+    }
+  }
 
   let moodboardReferenceUrl: string | null = null;
   let brandReferenceUrls: string[] | null = null;
@@ -93,6 +131,7 @@ export async function POST(
       brandRefs: brandReferenceUrls?.length ?? 0,
       moodboard: Boolean(moodboardReferenceUrl),
       variationCount: count,
+      hasImageUserPrompt: rewriteApplied,
     });
     const candidates = await Promise.all(
       Array.from({ length: count }, (_, idx) =>
@@ -104,6 +143,8 @@ export async function POST(
           newsContext,
           moodboardReferenceUrl,
           brandReferenceUrls,
+          subjectAnchor: moodboardReferenceUrl ? "moodboard" : "auto",
+          hasUserOverride: rewriteApplied,
         })
       )
     );

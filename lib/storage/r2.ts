@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -58,4 +59,24 @@ export async function uploadPublicImage(
   );
 
   return `${publicBase}/${key}`;
+}
+
+/** Alias for uploads where MIME type is not an image (e.g. PDF strategy documents). */
+export const uploadPublicFile = uploadPublicImage;
+
+/** Best-effort delete by public URL (must match `uploadPublicFile` base URL prefix). */
+export async function deletePublicFileByUrl(publicUrl: string): Promise<void> {
+  const publicBase = resolvePublicBase();
+  if (!publicUrl.startsWith(`${publicBase}/`)) {
+    console.warn("[r2] deletePublicFileByUrl: URL not under public base, skipping");
+    return;
+  }
+  const key = publicUrl.slice(publicBase.length + 1);
+  const bucket = resolveBucket();
+  await getClient().send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
+  );
 }

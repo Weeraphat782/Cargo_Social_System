@@ -78,6 +78,7 @@ export async function GET(
     prisma.campaign.findUnique({
       where: { id },
       include: {
+        strategy: { select: { id: true, name: true } },
         _count: { select: { posts: true } },
         runs: { orderBy: { startedAt: "desc" }, take: 30 },
         posts: {

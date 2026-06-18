@@ -3,6 +3,7 @@
 import { type Dispatch, type SetStateAction, useState } from "react";
 import Image from "next/image";
 import type { PostListRowJson as Post } from "@/lib/post-list-payload";
+import { hasUsableMoodboard } from "@/lib/campaigns/require-moodboard";
 import type { RefCategory } from "./queue-shared";
 import { platformMeta, sortByPlatform, statusBadge, type SetPending } from "./queue-shared";
 import { PlatformIcon, PlatformPill, ImageLightbox } from "@/components/ui";
@@ -15,6 +16,8 @@ export type QueueInteractivePostCardProps = {
   setActivePlatformTab: Dispatch<SetStateAction<Record<string, string>>>;
   promptDrafts: Record<string, string>;
   setPromptDrafts: Dispatch<SetStateAction<Record<string, string>>>;
+  creatorDirectionDrafts: Record<string, string>;
+  setCreatorDirectionDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   refCategories: RefCategory[];
   refCategoryByVariant: Record<string, string>;
   setRefCategoryByVariant: Dispatch<SetStateAction<Record<string, string>>>;
@@ -47,6 +50,8 @@ export function QueueInteractivePostCard({
   setActivePlatformTab,
   promptDrafts,
   setPromptDrafts,
+  creatorDirectionDrafts,
+  setCreatorDirectionDrafts,
   refCategories,
   refCategoryByVariant,
   setRefCategoryByVariant,
@@ -75,6 +80,9 @@ export function QueueInteractivePostCard({
               post.variants.map((v) => v.media[0]?.imageUrl).find(Boolean) ?? null;
             const ex = (post.variants[0]?.caption || post.sourceNews?.title || "").trim();
             const excerpt = ex.length > 180 ? `${ex.slice(0, 180)}…` : ex;
+            const blockCampaignImages =
+              post.campaign != null &&
+              !hasUsableMoodboard(post.campaign.moodboardImages);
             return (
             <>
             <div className="omg-card is-interactive" style={{ overflow: "hidden" }}>
@@ -326,6 +334,27 @@ export function QueueInteractivePostCard({
                                 setPromptDrafts(prev => ({ ...prev, [v.id]: e.target.value }))
                               }
                             />
+                            <label style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                              Creator direction (negatives become positives, optional)
+                            </label>
+                            <textarea
+                              className="omg-input"
+                              style={{ fontSize: 12, padding: "8px 10px", resize: "vertical", minHeight: 56 }}
+                              rows={2}
+                              value={creatorDirectionDrafts[v.id] ?? ""}
+                              placeholder='e.g. "no people", "avoid logos"'
+                              onChange={e =>
+                                setCreatorDirectionDrafts(prev => ({
+                                  ...prev,
+                                  [v.id]: e.target.value,
+                                }))
+                              }
+                            />
+                            {blockCampaignImages && (
+                              <p style={{ margin: 0, fontSize: 11, color: "var(--warning, #b45309)", fontWeight: 600 }}>
+                                Generate the campaign moodboard first — image tools are disabled until then.
+                              </p>
+                            )}
                             <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Reference set</label>
                             <select
                               className="omg-input"
@@ -351,13 +380,14 @@ export function QueueInteractivePostCard({
                                 type="button"
                                 className="omg-btn-ghost"
                                 style={{ fontSize: 11, padding: "6px 12px" }}
-                                disabled={regenLoading[v.id]}
+                                disabled={regenLoading[v.id] || blockCampaignImages}
                                 onClick={async () => {
                                   setRegenLoading(prev => ({ ...prev, [v.id]: true }));
                                   const prompt =
                                     (promptDrafts[v.id] ?? "").trim() ||
                                     "Professional logistics hero image, no text";
                                   const refCat = refCategoryByVariant[v.id]?.trim();
+                                  const userPrompt = (creatorDirectionDrafts[v.id] ?? "").trim();
                                   try {
                                     const res = await fetch(`/api/posts/${post.id}/regenerate-image`, {
                                       method: "POST",
@@ -365,6 +395,7 @@ export function QueueInteractivePostCard({
                                       body: JSON.stringify({
                                         variantId: v.id,
                                         prompt,
+                                        ...(userPrompt ? { userPrompt } : {}),
                                         referenceCategory: refCat || undefined,
                                       }),
                                     });
@@ -438,13 +469,14 @@ export function QueueInteractivePostCard({
                                 type="button"
                                 className="omg-btn-primary"
                                 style={{ fontSize: 11, padding: "6px 12px" }}
-                                disabled={variationsLoading[v.id]}
+                                disabled={variationsLoading[v.id] || blockCampaignImages}
                                 onClick={async () => {
                                   setVariationsLoading(prev => ({ ...prev, [v.id]: true }));
                                   const prompt =
                                     (promptDrafts[v.id] ?? "").trim() ||
                                     "Professional logistics hero image, no text";
                                   const refCat = refCategoryByVariant[v.id]?.trim();
+                                  const userPrompt = (creatorDirectionDrafts[v.id] ?? "").trim();
                                   try {
                                     const res = await fetch(`/api/posts/${post.id}/generate-variations`, {
                                       method: "POST",
@@ -452,6 +484,7 @@ export function QueueInteractivePostCard({
                                       body: JSON.stringify({
                                         variantId: v.id,
                                         prompt,
+                                        ...(userPrompt ? { userPrompt } : {}),
                                         referenceCategory: refCat || undefined,
                                         count: 3,
                                       }),

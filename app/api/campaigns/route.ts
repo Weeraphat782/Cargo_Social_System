@@ -1,29 +1,16 @@
 import { NextResponse } from "next/server";
-import {
+import type {
   CampaignContentMode,
   CampaignStatus,
-  Prisma,
-  type CampaignCadence,
-  type CampaignTheme,
-  type Platform,
+  CampaignCadence,
+  CampaignTheme,
+  Platform,
 } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { fetchCampaignsListForPage } from "@/lib/campaigns-list-payload";
-import { computeNextRun } from "@/lib/campaigns/scheduler";
-import {
-  MAX_CUSTOM_DATETIME_SLOTS,
-  normalizeScheduledDatetimeSlots,
-  toStoredScheduleConfig,
-} from "@/lib/campaigns/schedule-config";
-import {
-  MAX_PUBLISH_TIME_SLOTS,
-  normalizePublishTimesFromApi,
-} from "@/lib/campaigns/publish-times";
+import { createCampaignFromPayload } from "@/lib/campaigns/create-from-payload";
 import { revalidateTag } from "next/cache";
-import { isBrandTemplateId } from "@/lib/brands/registry";
-
-const PLATFORMS: Platform[] = ["FACEBOOK", "INSTAGRAM", "LINKEDIN", "OMG"];
 
 export async function GET() {
   const session = await auth();
@@ -63,7 +50,6 @@ export async function POST(req: Request) {
     status?: CampaignStatus;
     daysOfWeekMulti?: number[];
     specificDates?: string[];
-    /** @deprecated Use scheduledDatetimes */
     testDatetimes?: string[];
     scheduledDatetimes?: string[];
     brandTemplateId?: string;
@@ -74,195 +60,11 @@ export async function POST(req: Request) {
     platformStrategies?: Record<string, string> | null;
   };
 
-  let brandTemplateId = "omg";
-  if (body.brandTemplateId != null && body.brandTemplateId !== "") {
-    const tid = body.brandTemplateId.trim();
-    if (!(await isBrandTemplateId(tid))) {
-      return NextResponse.json({ error: "invalid brandTemplateId" }, { status: 400 });
-    }
-    brandTemplateId = tid;
+  const result = await createCampaignFromPayload(body);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: "name required" }, { status: 400 });
-  }
-  if (!body.theme || !body.cadence) {
-    return NextResponse.json({ error: "theme and cadence required" }, { status: 400 });
-  }
-
-  const contentMode = body.contentMode ?? CampaignContentMode.NEWS_DRIVEN;
-  if (
-    contentMode !== CampaignContentMode.NEWS_DRIVEN &&
-    contentMode !== CampaignContentMode.SELF_PROMO
-  ) {
-    return NextResponse.json({ error: "invalid contentMode" }, { status: 400 });
-  }
-
-  const keywordsTrim = (body.keywords ?? "").trim();
-  if (contentMode === CampaignContentMode.NEWS_DRIVEN && !keywordsTrim) {
-    return NextResponse.json(
-      { error: "keywords required for news-driven campaigns" },
-      { status: 400 }
-    );
-  }
-
-  if (body.cadence === "WEEKLY_MULTI") {
-    const d = (body.daysOfWeekMulti ?? []).filter((n) => n >= 0 && n <= 6);
-    if (d.length === 0) {
-      return NextResponse.json({ error: "Select at least one day of the week" }, { status: 400 });
-    }
-  }
-  if (body.cadence === "SPECIFIC_DATES") {
-    const s = (body.specificDates ?? []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-    if (s.length === 0) {
-      return NextResponse.json({ error: "Select at least one post date" }, { status: 400 });
-    }
-  }
-  if (body.cadence === "CUSTOM_DATETIMES") {
-    const td = normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes);
-    if (td.length === 0) {
-      return NextResponse.json(
-        { error: "Add at least one scheduled datetime (YYYY-MM-DDTHH:mm)" },
-        { status: 400 }
-      );
-    }
-    if (td.length > MAX_CUSTOM_DATETIME_SLOTS) {
-      return NextResponse.json(
-        { error: `At most ${MAX_CUSTOM_DATETIME_SLOTS} datetime slots allowed` },
-        { status: 400 }
-      );
-    }
-  }
-
-  const needsScheduleConfig =
-    body.cadence === "DAILY" ||
-    body.cadence === "WEEKLY_MULTI" ||
-    body.cadence === "SPECIFIC_DATES" ||
-    body.cadence === "CUSTOM_DATETIMES";
-  const scRaw = toStoredScheduleConfig(
-    body.cadence,
-    body.daysOfWeekMulti ?? [],
-    body.specificDates ?? [],
-    normalizeScheduledDatetimeSlots(body.scheduledDatetimes, body.testDatetimes)
-  );
-  const scheduleConfig: Prisma.InputJsonValue | typeof Prisma.JsonNull = needsScheduleConfig
-    ? (scRaw != null ? scRaw : ({} as Prisma.InputJsonValue))
-    : Prisma.JsonNull;
-
-  const status = body.status ?? CampaignStatus.DRAFT;
-  const startAt = body.startAt ? new Date(body.startAt) : new Date();
-  const endAt = body.endAt ? new Date(body.endAt) : null;
-  const platforms = body.platforms?.length
-    ? body.platforms
-    : PLATFORMS;
-  const postsPerRun = Math.min(5, Math.max(1, body.postsPerRun ?? 1));
-  const imagesPerPost = Math.min(4, Math.max(1, body.imagesPerPost ?? 1));
-  const dayOfWeek = body.dayOfWeek ?? 1;
-  const hourOfDay = body.hourOfDay ?? 9;
-  if (typeof body.publishMinuteOfHour === "number" && body.publishHourOfDay == null) {
-    return NextResponse.json(
-      { error: "publishHourOfDay is required when publishMinuteOfHour is set" },
-      { status: 400 }
-    );
-  }
-
-  const publishHourOfDay =
-    body.publishHourOfDay != null
-      ? Math.max(0, Math.min(23, body.publishHourOfDay))
-      : null;
-  const publishTimesNorm = normalizePublishTimesFromApi(body.publishTimes);
-  if (publishTimesNorm.length > MAX_PUBLISH_TIME_SLOTS) {
-    return NextResponse.json(
-      { error: `At most ${MAX_PUBLISH_TIME_SLOTS} publish times allowed` },
-      { status: 400 }
-    );
-  }
-
-  const publishMinuteOfHour =
-    publishHourOfDay != null && typeof body.publishMinuteOfHour === "number"
-      ? Math.max(0, Math.min(59, body.publishMinuteOfHour))
-      : null;
-
-  let publishSpacingMinutes: number | null = null;
-  if (
-    publishTimesNorm.length === 0 &&
-    publishHourOfDay != null &&
-    typeof body.publishSpacingMinutes === "number"
-  ) {
-    publishSpacingMinutes = Math.max(1, Math.min(1440, Math.floor(body.publishSpacingMinutes)));
-  }
-
-  const timezone = (body.timezone ?? "Asia/Bangkok").trim() || "Asia/Bangkok";
-
-  const nextRunAt =
-    status === CampaignStatus.ACTIVE
-      ? computeNextRun(
-          {
-            cadence: body.cadence,
-            dayOfWeek,
-            hourOfDay,
-            timezone,
-            lastRunAt: null,
-            startAt,
-            customCron: body.customCron ?? null,
-            scheduleConfig: needsScheduleConfig
-              ? ((scRaw as Prisma.JsonValue) ?? ({} as Prisma.JsonValue))
-              : null,
-          },
-          new Date()
-        )
-      : null;
-
-  if (status === CampaignStatus.ACTIVE && nextRunAt == null) {
-    return NextResponse.json(
-      {
-        error: "This schedule has no future run; add future dates or set status to DRAFT.",
-      },
-      { status: 400 }
-    );
-  }
-
-  const contentLanguage = ["en", "th"].includes(body.contentLanguage ?? "") ? body.contentLanguage! : "en";
-
-  const c = await prisma.campaign.create({
-    data: {
-      campaignGoal: body.campaignGoal?.trim() || null,
-      targetPersona: body.targetPersona?.trim() || null,
-      contentPillars: body.contentPillars?.trim() || null,
-      platformStrategies: body.platformStrategies ?? Prisma.JsonNull,
-      name: body.name.trim(),
-      brandTemplateId,
-      description: body.description?.trim() || null,
-      status,
-      keywords: keywordsTrim,
-      contentMode,
-      contentLanguage,
-      brandVoice: body.brandVoice?.trim() || null,
-      theme: body.theme,
-      cadence: body.cadence,
-      dayOfWeek,
-      hourOfDay,
-      timezone,
-      customCron: body.customCron?.trim() || null,
-      scheduleConfig,
-      platforms,
-      postsPerRun,
-      imagesPerPost,
-      totalPostsCap: body.totalPostsCap ?? null,
-      autoApprove: body.autoApprove ?? false,
-      publishHourOfDay,
-      publishMinuteOfHour,
-      publishSpacingMinutes,
-      publishTimes:
-        publishTimesNorm.length > 0
-          ? (publishTimesNorm as unknown as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-      startAt,
-      endAt,
-      nextRunAt,
-    },
-  });
 
   revalidateTag("campaigns");
-  return NextResponse.json(c);
+  return NextResponse.json(result.campaign);
 }

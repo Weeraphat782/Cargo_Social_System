@@ -7,6 +7,8 @@ export type PublishInput = {
   title?: string;
   bodyMd?: string;
   slug?: string;
+  /** OMG-only — HTML meta description (150-160 chars) */
+  metaDescription?: string;
 };
 
 export type PublishResult = { remoteId: string; raw?: unknown };

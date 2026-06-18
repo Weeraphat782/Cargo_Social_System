@@ -194,6 +194,27 @@ export default function CampaignDetailClient({ initialData }: { initialData: Cam
         subtitle={`${c.status} · ${c.contentMode} · ${c.cadence} · theme ${c.theme} · ${c.timezone}`}
         icon={<FileStack size={28} strokeWidth={1.75} />}
       />
+      {c.strategy ? (
+        <div style={{ marginTop: -8, marginBottom: 16 }}>
+          <Link
+            href={`/strategies/${c.strategy.id}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: "var(--accent-dim)",
+              color: "var(--accent)",
+              textDecoration: "none",
+            }}
+          >
+            From strategy: {c.strategy.name}
+          </Link>
+        </div>
+      ) : null}
       <div
         className="omg-card is-interactive"
         style={{

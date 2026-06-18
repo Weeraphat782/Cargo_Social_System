@@ -12,6 +12,11 @@ export const POST_LIST_SELECT = {
   failureCount: true,
   lastError: true,
   topic: { select: { name: true } },
+  campaign: {
+    select: {
+      moodboardImages: true,
+    },
+  },
   sourceNews: { select: { title: true, url: true } },
   variants: {
     orderBy: { platform: "asc" },
@@ -42,6 +47,7 @@ export type PostListRowJson = {
   failureCount: number;
   lastError: string | null;
   topic: { name: string } | null;
+  campaign: { moodboardImages: unknown } | null;
   sourceNews: { title: string; url: string } | null;
   variants: Array<{
     id: string;
@@ -67,6 +73,7 @@ function trimMediaDataUrls(
     failureCount: number;
     lastError: string | null;
     topic: { name: string } | null;
+    campaign: { moodboardImages: unknown } | null;
     sourceNews: { title: string; url: string } | null;
     variants: Array<{
       id: string;
@@ -91,6 +98,7 @@ function trimMediaDataUrls(
     failureCount: p.failureCount,
     lastError: p.lastError,
     topic: p.topic,
+    campaign: p.campaign,
     sourceNews: p.sourceNews,
     variants: p.variants.map((v) => ({
       ...v,

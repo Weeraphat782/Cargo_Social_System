@@ -66,6 +66,15 @@ export async function generateAndUploadImage(options: {
    * Order with moodboard: brand refs first (up to 4), then moodboard (if room), then category refs; total capped at 5.
    */
   brandReferenceUrls?: string[] | null;
+  /**
+   * When true, brand reference photos guide palette/lighting only; subject follows CREATOR DIRECTION in text.
+   */
+  hasUserOverride?: boolean;
+  /**
+   * Who anchors subject matter when refs disagree.
+   * `auto`: moodboard URL present → moodboard anchor; else brand anchor (legacy).
+   */
+  subjectAnchor?: "moodboard" | "brand" | "auto";
 }): Promise<{ imageUrl: string; prompt: string }> {
   const { w, h, label } = ASPECT_PRESETS[options.aspect];
   const refCategory = options.referenceCategory?.trim() || undefined;
@@ -83,15 +92,15 @@ export async function generateAndUploadImage(options: {
   const nc = options.newsContext;
   const sourceBlock =
     nc?.title?.trim() || nc?.snippet?.trim()
-      ? `\n\nSource article (for grounding; reflect this story, not a generic stock look):\nTitle: ${(nc?.title ?? "").trim()}\n${(nc?.snippet ?? "").trim() ? `Details: ${(nc?.snippet ?? "").trim()}\n` : ""}`
+      ? `\n\nSource article (for grounding; reflect this story, not a generic stock look):\nTitle: ${(nc?.title ?? "").trim()}\n${(nc?.snippet ?? "").trim() ? `Details: ${(nc?.snippet ?? "").trim()}\n` : ""}Note on human presence: any mention of people, workers, staff, customers, or quoted persons in this article is CONTEXT ONLY — do NOT add human figures to the image unless the [CREATOR DIRECTION] block in the prompt explicitly requires people, OR unless the imagePrompt Scene: line explicitly names a person as the SOLE focus. When in doubt, defer to the moodboard's depiction of human presence.\n`
       : "";
 
   const fullPrompt = `${options.prompt}${sourceBlock}${styleNotesBlock}
 
 Style: professional commercial marketing photography, editorial quality, natural composition, no text overlays, no watermarks, no logos.
-IMPORTANT — avoid hallucination: Do NOT attempt to render specific named real-world locations, identifiable buildings, or architectural structures that require accurate visual knowledge of a particular place. Represent concepts through carefully composed, emotionally resonant scenes — mood, light, atmosphere, human presence — that feel authentic without claiming to depict any specific real location. Stay true to the industry and campaign context described above; avoid defaulting to unrelated generic stock imagery.
-If any palette/style hint above names specific places, buildings, or landmarks (e.g. monasteries, named valleys, named cities), interpret those as mood and atmosphere references only — render a generic, atmospheric scene that fits the feeling, never a literal reproduction of a named real-world location.
-Aim for visual variety across different posts; prefer a concept-driven scene with real human presence over an empty or abstract stock look.
+IMPORTANT — avoid hallucination: do not attempt to render named real-world locations, identifiable buildings, or architectural structures requiring accurate visual knowledge of a specific place. Represent concepts through carefully composed scenes (mood, light, atmosphere) without claiming to depict any specific real location.
+If any palette/style hint above names specific places, buildings, or landmarks, interpret those as mood references only — render a generic atmospheric scene that fits the feeling, never a literal reproduction of a named real-world location.
+Subject choice: follow the text prompt's [CREATOR DIRECTION — HIGHEST PRIORITY] block exactly when present; it overrides conflicting hints elsewhere in the prompt.
 Composition: ${label}, approximately ${w}x${h} pixels.`;
 
   const ai = getGenAI();
@@ -132,22 +141,64 @@ Composition: ${label}, approximately ${w}x${h} pixels.`;
   const hasMoodboard = prioritisedRefs.some((p) => p.role === "moodboard");
   const hasBrand = prioritisedRefs.some((p) => p.role === "brand");
 
+  const hasUserOverride = Boolean(options.hasUserOverride);
+
+  const effectiveAnchor: "moodboard" | "brand" =
+    options.subjectAnchor === "moodboard"
+      ? "moodboard"
+      : options.subjectAnchor === "brand"
+        ? "brand"
+        : includeMoodboard
+          ? "moodboard"
+          : "brand";
+
   const introLines: string[] = [];
   introLines.push(
     "MULTIMODAL IMAGE ORDER (parts left-to-right): brand reference photographs first (if any), then campaign moodboard (if any), then optional folder style refs."
   );
-  if (hasBrand) {
-    introLines.push(
-      "• The FIRST images are the brand's OFFICIAL reference photographs — they are the PRIMARY visual anchor. Match color palette, lighting, photographic style, lens feel, and subject treatment. Do NOT add on-image text, logos, watermarks, signage, or branded objects not visible in those references unless the text prompt explicitly calls for a minimal abstract scene."
-    );
-    introLines.push(
-      "• Brand references override generic stock tendencies; if palette hints in the text conflict with the photos, follow the photos."
-    );
-  }
-  if (hasMoodboard && hasBrand) {
-    introLines.push(
-      "• After the brand-reference block: campaign moodboard — extend its mood while staying inside the brand photo look-and-feel."
-    );
+
+  if (effectiveAnchor === "moodboard" && hasMoodboard) {
+    if (hasBrand) {
+      introLines.push(
+        "• Campaign MOODBOARD is the SUBJECT anchor for this image. The post subject (from the text prompt and source article) lives inside its visual world: match its mood, color grading, composition feel, AND the general human presence shown in it (if the moodboard depicts no people, default to a people-free scene; if it depicts people, people are welcome)."
+      );
+      introLines.push(
+        "• The moodboard's human-presence default is overridden ONLY in two cases: (a) the [CREATOR DIRECTION — HIGHEST PRIORITY] block explicitly asks for people; or (b) the imagePrompt 'Scene:' line names a single specific human action as the sole subject (e.g. 'a courier handing over a parcel'). Generic editorial scenes that merely mention people in passing (e.g. 'a busy warehouse with workers in the background') do NOT override the moodboard default — render the same scene people-free instead."
+      );
+      introLines.push(
+        "• Brand reference photographs are PALETTE / LIGHTING / LENS / ATMOSPHERE guidance only. Match their color grading, light quality, and photographic feel. Do NOT copy subjects (people, objects, named places) from them when they conflict with the moodboard or the text prompt."
+      );
+      if (hasUserOverride) {
+        introLines.push(
+          "• The CREATOR DIRECTION block refines subject details — follow it exactly when it conflicts with generic hints elsewhere."
+        );
+      }
+    } else {
+      introLines.push(
+        "• The attached campaign moodboard is the SUBJECT anchor — the scene must belong to its visual world while honoring the text prompt and source article. Match the moodboard's general human presence by default (no people if it shows none). The moodboard's human-presence default is overridden ONLY in two cases: (a) the [CREATOR DIRECTION — HIGHEST PRIORITY] block explicitly asks for people; or (b) the imagePrompt 'Scene:' line names a single specific human action as the sole subject (e.g. 'a courier handing over a parcel'). Generic editorial scenes that merely mention people in passing (e.g. 'a busy warehouse with workers in the background') do NOT override the moodboard default — render the same scene people-free instead."
+      );
+    }
+  } else if (hasBrand) {
+    if (hasUserOverride) {
+      introLines.push(
+        "• Brand reference photographs are PALETTE / LIGHTING / LENS / ATMOSPHERE guidance only. Match their color grading, light quality, and photographic feel."
+      );
+      introLines.push(
+        "• SUBJECT matter MUST follow the CREATOR DIRECTION block in the text prompt — do NOT copy subjects (people, objects, scenes) from the reference photos when they conflict with the creator direction."
+      );
+    } else {
+      introLines.push(
+        "• The FIRST images are the brand's OFFICIAL reference photographs — they are the PRIMARY visual anchor. Match color palette, lighting, photographic style, lens feel, and subject treatment. Do NOT add on-image text, logos, watermarks, signage, or branded objects not visible in those references unless the text prompt explicitly calls for a minimal abstract scene."
+      );
+      introLines.push(
+        "• Brand references override generic stock tendencies; if palette hints in the text conflict with the photos, follow the photos."
+      );
+    }
+    if (hasMoodboard && hasBrand) {
+      introLines.push(
+        "• After the brand-reference block: campaign moodboard — extend its mood while staying inside the brand photo look-and-feel."
+      );
+    }
   } else if (hasMoodboard && !hasBrand) {
     introLines.push(
       "• The first attached image is the campaign moodboard — match its palette and aesthetic closely."
@@ -155,7 +206,9 @@ Composition: ${label}, approximately ${w}x${h} pixels.`;
   }
   if (categorySlice.length > 0) {
     introLines.push(
-      "• Final attached images are supplementary composition hints only — they must not contradict brand references or moodboard."
+      effectiveAnchor === "moodboard"
+        ? "• Final attached images are supplementary composition hints only — they must not contradict the moodboard subject anchor or the text prompt."
+        : "• Final attached images are supplementary composition hints only — they must not contradict brand references or moodboard."
     );
   }
 
@@ -193,6 +246,8 @@ Composition: ${label}, approximately ${w}x${h} pixels.`;
       storageKeyPrefix: options.storageKeyPrefix,
       prompt: fullPrompt,
       promptImages: allRefImages.length,
+      hasUserOverride,
+      effectiveAnchor,
     },
     async (): Promise<ImageGenOutcome> => {
       const response = await withGeminiRetry(

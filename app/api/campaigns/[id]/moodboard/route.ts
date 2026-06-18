@@ -5,6 +5,10 @@ import { prisma } from "@/lib/db";
 import { withAiLog } from "@/lib/ai-logger";
 import { generateAndUploadImage } from "@/lib/imagegen/gemini";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
+import {
+  buildMoodboardCreatorBlock,
+  rewriteMoodboardUserPrompt,
+} from "@/lib/imagegen/rewrite-user-prompt";
 
 const PLATFORM_LABELS: Record<string, string> = {
   FACEBOOK: "Facebook",
@@ -86,7 +90,7 @@ export async function POST(
   const colorStyle = [ba?.primaryColor, ba?.secondaryColor].filter(Boolean).join(" + ") || "Brand-consistent";
 
   const promptLibraryBlock = ba?.promptLibrary?.length
-    ? `\nBrand mood inspiration (use for tone, palette, and conceptual direction only — do NOT render any item literally as a named place or identifiable building):\n${ba.promptLibrary.slice(0, 3).map((p) => `- ${p}`).join("\n")}\n`
+    ? `\nBrand mood inspiration — palette / lighting / texture / atmosphere ONLY. Do NOT render any item from this list as a literal subject (no buildings, monuments, places, or objects pulled from these phrases). If a phrase names a place, building, or landmark, treat it strictly as an atmosphere reference:\n${ba.promptLibrary.slice(0, 3).map((p) => `- ${p}`).join("\n")}\n`
     : "";
 
   const contentPillarsBlock = campaign.contentPillars
@@ -109,10 +113,6 @@ export async function POST(
     || themeBundle?.tone
     || "a credible, category-aligned presence";
 
-  const userDirectionBlock = userPrompt
-    ? `\nCreator's specific direction (PRIMARY brief — adjust all visual choices to satisfy this):\n"${userPrompt}"\n`
-    : "";
-
   const descriptionBlock = campaign.description?.trim()
     ? `\nCampaign concept: ${campaign.description.trim()}`
     : "";
@@ -132,11 +132,39 @@ export async function POST(
     ? ` (theme overlay: ${themeBundle.visualStyleNotes})`
     : "";
 
+  const rewrite = userPrompt
+    ? await rewriteMoodboardUserPrompt({
+        userPrompt,
+        campaign: {
+          id: campaign.id,
+          name: campaign.name,
+          description: campaign.description,
+          keywords: campaign.keywords,
+          theme: campaign.theme,
+          brandTemplateId: campaign.brandTemplateId,
+        },
+        template,
+      })
+    : null;
+
+  const creatorBlock = rewrite ? `\n\n${buildMoodboardCreatorBlock(rewrite)}` : "";
+
+  const campaignSubjectBlock = `
+
+[CAMPAIGN SUBJECT — HIGHEST PRIORITY FOR SUBJECT CHOICE]
+- Derive every scene, object, and activity in the moodboard from these fields below — NOT from the brand reference images and NOT from the brand mood inspiration list.
+- Campaign name: ${campaign.name}
+- Campaign description: ${campaign.description?.trim() || "(none — infer from goal + core message + theme angle)"}
+- Core message / keywords: ${campaign.keywords || "(none)"}
+- Content pillars: ${campaign.contentPillars?.trim() || "(none)"}
+- Theme angle: ${themeBundle?.angle ?? "(none)"}
+- Target audience: ${campaign.targetPersona ?? "Audience aligned with the brand category"}
+- If a subject is not implied by these fields, leave the panel empty of that subject — never fill the gap with subjects copied from the brand reference images.`;
+
   const moodboardPrompt = `Create a high-impact marketing campaign moodboard for: ${campaign.name}.
 
 [CAMPAIGN OBJECTIVE]
 Drive ${campaign.campaignGoal ?? "brand awareness and engagement"} by positioning the brand as ${positioning}.${descriptionBlock}
-${userDirectionBlock}
 [TARGET AUDIENCE INSIGHT]
 - Profile: ${campaign.targetPersona ?? "Audience aligned with the brand category"}
 - Core motivation: derived from the campaign goal and core message below
@@ -150,12 +178,12 @@ ${userDirectionBlock}
 - Color palette: ${colorStyle}${themePaletteOverlay}
 - Lighting & lens: natural balanced light, editorial clarity, cohesive across the board
 - Composition: layered moodboard collage with varied scales (wide, mid, close-up)
-- Texture & material: authentic to the brand's world${promptLibraryBlock}
+- Texture & material: authentic to the brand's world${promptLibraryBlock}${campaignSubjectBlock}
 
 [CONTENT ELEMENTS]
-- Lifestyle / use-case scenarios: aspirational but plausible, never literal landmarks
-- Product or service in real context: prefer human presence over empty stock
-- Emotional storytelling moments — intimate human details and atmospheric wide shots
+- Lifestyle / use-case scenarios: drawn from [CAMPAIGN SUBJECT] above — aspirational but plausible, never literal landmarks, and never subjects copied from the brand reference images
+- Subject treatment: follow the CREATOR DIRECTION block below when present; do not assume human figures unless that block asks for people
+- Emotional storytelling moments — mood, light, texture, and composition carry the story when figures are not requested
 - Branding: subtle, integrated, non-intrusive (no logos, no on-image text)
 
 [MARKETING TOUCHPOINTS]
@@ -165,8 +193,10 @@ Adapt visuals for: ${platformsLine}.
 ${moodEmotions}.
 
 [CREATIVE REFERENCES]
-- Attached reference images are the PRIMARY visual anchor (palette, lighting, lens character, photographic style). The moodboard must read as a natural extension of those photos — do NOT drift into a generic stock look that ignores them.
-- Treat any named places, buildings, monuments, or landmarks in the brand text as MOOD references only. Render generic, plausible scenes that fit the atmosphere — never attempt photographic recreation of a specific real-world location.
+- Attached brand reference images are the PALETTE / LIGHTING / LENS / ATMOSPHERE anchor only. Match their color grading, light quality, photographic feel, and editorial polish.
+- Do NOT copy subjects from the brand reference images. Specifically: do NOT borrow buildings, monasteries, landmarks, vehicles, signage, people, or objects that appear in those photos unless the [CAMPAIGN SUBJECT] block above explicitly calls for them.
+- Subject matter in the moodboard MUST come from the [CAMPAIGN SUBJECT] block above — not from the brand refs and not from the brand mood inspiration list.
+- Treat any named places, buildings, or landmarks anywhere in this prompt as atmosphere references only — never render a specific real-world location.
 - Avoid: text or typography, brand names, logos, watermarks, generic stock photography, literal landmark recreation.
 
 [OUTPUT REQUIREMENT]
@@ -176,7 +206,7 @@ ABSOLUTE REQUIREMENTS — failure to follow is unacceptable:
 - ZERO text anywhere in the image — no words, letters, numbers, brand names, logos, watermarks, captions, or labels of any kind
 - Consistent visual language and color grading throughout the entire board
 - Every element serves the brand positioning and visual direction above
-Final instruction: absolutely no text, no typography, no letters, no numbers, no words anywhere in any part of the image.`;
+Final instruction: absolutely no text, no typography, no letters, no numbers, no words anywhere in any part of the image.${creatorBlock}`;
 
   const brandRefsCount = (ba?.referenceImages ?? []).filter((u) => u?.trim()).length;
 
@@ -187,6 +217,7 @@ Final instruction: absolutely no text, no typography, no letters, no numbers, no
         campaignId: campaign.id,
         brandTemplateId: campaign.brandTemplateId,
         hasUserPrompt: Boolean(userPrompt),
+        hasUserOverride: Boolean(rewrite),
         brandRefsCount,
         prompt: moodboardPrompt,
       },
@@ -197,6 +228,7 @@ Final instruction: absolutely no text, no typography, no letters, no numbers, no
           storageKeyPrefix: `campaign/${id}/moodboard/${Date.now()}`,
           referenceCategory: null,
           brandReferenceUrls: ba?.referenceImages ?? null,
+          hasUserOverride: Boolean(rewrite),
         }),
       (r) => ({
         ok: Boolean(r.imageUrl && !r.imageUrl.startsWith("data:")),
