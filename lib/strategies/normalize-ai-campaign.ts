@@ -101,14 +101,14 @@ export function normalizeStrategyAiCampaignToPayload(
     daysOfWeekMulti = [dayOfWeek];
   }
 
-  let specificDates = splitCsv(c.specificDates).filter((d) =>
+  const specificDates = splitCsv(c.specificDates).filter((d) =>
     /^\d{4}-\d{2}-\d{2}$/.test(d)
   );
   if (cadence === "SPECIFIC_DATES" && specificDates.length === 0) {
     cadence = "WEEKLY";
   }
 
-  let scheduledDatetimes = splitCsv(c.scheduledDatetimes).filter((s) =>
+  const scheduledDatetimes = splitCsv(c.scheduledDatetimes).filter((s) =>
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)
   );
   if (cadence === "CUSTOM_DATETIMES" && scheduledDatetimes.length === 0) {
