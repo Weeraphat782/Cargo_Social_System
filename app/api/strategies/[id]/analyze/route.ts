@@ -13,6 +13,8 @@ import { requireEnv } from "@/lib/env";
 import { withGeminiRetry } from "@/lib/gemini-retry";
 import { withAiLog } from "@/lib/ai-logger";
 import { getBrandTemplateOrDefault } from "@/lib/brands/registry";
+
+const INTERACTIVE_TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 } as const;
 import {
   buildStrategyAnalyzePrompt,
   STRATEGY_THEME_ORDER,
@@ -256,7 +258,7 @@ export async function POST(
           analyzeError: null,
         },
       });
-    });
+    }, INTERACTIVE_TX_OPTIONS);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await prisma.marketingStrategy.update({

@@ -6,7 +6,23 @@ import {
   type CampaignCreateDb,
   type CreateCampaignPayload,
 } from "@/lib/campaigns/create-from-payload";
+import { ensureBrandTemplatesLoaded, isBrandTemplateId } from "@/lib/brands/registry";
 import { revalidateTag } from "next/cache";
+
+const INTERACTIVE_TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 } as const;
+
+function formatCommitError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (
+    msg.includes("Transaction not found") ||
+    msg.includes("Transaction API error") ||
+    /timed?\s*out/i.test(msg) ||
+    /timeout/i.test(msg)
+  ) {
+    return "Commit took too long or the database connection was interrupted. Please try again.";
+  }
+  return msg;
+}
 
 export async function POST(
   _req: Request,
@@ -38,6 +54,14 @@ export async function POST(
   if (strategy.status !== "READY_REVIEW") {
     return NextResponse.json(
       { error: "Commit is only available when analysis finished (Ready for review)" },
+      { status: 400 }
+    );
+  }
+
+  await ensureBrandTemplatesLoaded();
+  if (!(await isBrandTemplateId(strategy.brandTemplateId))) {
+    return NextResponse.json(
+      { error: `Invalid brand template: ${strategy.brandTemplateId}` },
       { status: 400 }
     );
   }
@@ -90,12 +114,12 @@ export async function POST(
       }
 
       return { createdCount: campaignIds.length, campaignIds };
-    });
+    }, INTERACTIVE_TX_OPTIONS);
 
     revalidateTag("campaigns");
     return NextResponse.json(outcome);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    console.error("[strategy commit]", e);
+    return NextResponse.json({ error: formatCommitError(e) }, { status: 400 });
   }
 }
